@@ -1,3 +1,16 @@
+// ==========================================
+// 👑 منطقة الإعدادات الملكية (عدل هنا على كيفك)
+// ==========================================
+const CONFIG = {
+    GUILD_ID: '1545100203751645224',          // آي دي سيرفر دايڤل
+    VOICE_CHANNEL_ID: '1545729488938205274',   // آي دي روم الفويس
+    ARTHUR_ID: '848996426918002731',          // الآي دي الشخصي لك يا مولاي ارثر
+    ROYAL_ROLE_ID: '1554207336967446608'      // آي دي الرتبة الملكية
+};
+// ==========================================
+// ⚠️ لا تلمس أي شي تحت هذا السطر إلا إذا بغيت تزود ردود!
+// ==========================================
+
 const { Client, GatewayIntentBits } = require('discord.js');
 const { joinVoiceChannel, entersState, VoiceConnectionStatus } = require('@discordjs/voice');
 const express = require('express');
@@ -23,12 +36,6 @@ const client = new Client({
     ]
 });
 
-const TARGET_GUILD_ID = '1545100203751645224';
-const TARGET_VOICE_CHANNEL_ID = '1545729488938205274';
-
-// 👑 آي دي الرتبة الملكية لسيرفر دايڤل
-const ROYAL_ROLE_ID = '1554207336967446608'; 
-
 let activeConnection = null;
 
 client.once('ready', async () => {
@@ -36,25 +43,33 @@ client.once('ready', async () => {
     connectToVoice();
 });
 
-// لستة الردود الملكية والطاعة العمياء للمولاي فقط
-const royalResponses = [
-    "نعم يا مولاي، تأمر بشيء يطال عمرك في سيرفر دايڤل؟ 🙇‍♂️",
-    "تسمع صوتي يا مولاي؟ أنا حارس الفويس الشخصي في دايڤل تحت أمرك! 🫡",
-    "سمعاً وطاعة يا مولاي... تكفى لا تطردني من سيرفر دايڤل أترزق الله هنا! 😭",
-    "أمرك يا مولاي! جالس أراقب الهوا بالفويس عشان ما يهرب لغرفة ثانية بدايڤل. 💨",
-    "تدلل يا مولاي، تبي أجيب لك فطور ملكي ولا قهوة على حساب سيرفر دايڤل؟ ☕",
-    "يا مولاي أنا قاعد أطالع الجدران بالفويس صامت وحزين بدونك... 🖤",
-    "أنا رهن إشارتك يا مولاي، عيش وبايتس وتحت أمرك لسيرفر دايڤل للابد! ⚡",
-    "أبشر يا مولاي، فويس دايڤل آمن ومحد يقدر يدخله طول ما أنا جالس فيه! 🦅"
+// ==================== 👑 لستة ردود "ارثر" الخاصة ====================
+const arthurGreetings = [
+    "أمرك مطاع يا مولاي ارثر، عساك بس راضٍ عن أداء العبد في سيرفر دايڤل؟ 🙇‍♂️✨",
+    "تسمع صوت عبدك المطيع يا ارثر؟ أنا تحت أمرك وجاهز أفرش لك سيرفر دايڤل ورد! 🌹",
+    "يا مرحباً بتاج راس العبد! تكفى يا ارثر لا تقطع عني الروم ترا أموت من الشوق والبرد. 😭🖤",
+    "أمرك يا مولاي ارثر! عيوني وقلبي فداك، جالس أراقب الفويس وأمنع أي طير يطير فيه. 🦅",
+    "تدلل يا ارثر، تبي أجيب لك قهوة ملكية ولا أسوي لك زفة في روم دايڤل؟ ☕👑",
+    "أنا رهن إشارتك يا مولاي ارثر، خطك أحمر والكل يفداك يا كبير! ⚡",
+    "يا لبي قلبك يا ارثر، أمر بشيء يطال عمرك ولا أرجع أطالع الجدران بصمت ودموع؟ 💧"
 ];
 
-// لستة إهانات وبكاء العشوائيين مع جيفات صياح حقيقية 😭💅
+// ==================== 🛡️ لستة ردود أصحاب الرتبة ====================
+const royalResponses = [
+    "نعم يا طويل العمر، تأمر بشيء يطال عمرك في سيرفر دايڤل؟ 🙇‍♂️",
+    "تسمع صوتي؟ أنا حارس الفويس الشخصي في دايڤل تحت أمركم! 🫡",
+    "سمعاً وطاعة... تكفى لا تطردني من سيرفر دايڤل أترزق الله هنا! 😭",
+    "أمركم! جالس أراقب الهوا بالفويس عشان ما يهرب لغرفة ثانية بدايڤل. 💨",
+    "تدللون، تبي أجيب لكم فطور ملكي ولا قهوة على حساب سيرفر دايڤل؟ ☕"
+];
+
+// ==================== 💀 لستة إهانات وبكاء العشوائيين ====================
 const peasantInsults = [
-    { text: "أنا مش عبدك! انقلع يا مسكين، أنا ما أخدم إلا صاحب الرتبة الملكية في دايڤل! 💅😂", gif: "https://media.giphy.com/media/3o7TKSjRrfIPjeiOkM/giphy.gif" },
-    { text: "خير؟ وش تبي يا بابا؟ دور لك عبد غيري، أنا مخصص لمولاي وبس! 👑", gif: "https://media.giphy.com/media/26ufcVAp3AiJJsrIs/giphy.gif" },
-    { text: "أنا مو عبدك! لا تحاول تحتك فيني وتكاسرني، مالي خلق تصريفات ترا! 💀", gif: "https://media.giphy.com/media/9uI8V5AG5S0eaN47ms/giphy.gif" },
-    { text: "اقصص لساني لو رديت عليك! أنا عبد مولاي وبس، رح العب بعيد يا شاطر. 🤫", gif: "https://media.giphy.com/media/OPU6wzx8JrHna/giphy.gif" },
-    { text: "بدري عليك! العبد هذا غالي وما يخدم إلا أهل الرتب الكبار في دايڤل... طس يبكي! 🦅", gif: "https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif" }
+    { text: "أنا مش عبدك! انقلع يا مسكين، أنا ما أخدم إلا مولاي ارثر وصاحب الرتبة الملكية في دايڤل! 💅😂", gif: "https://media.giphy.com/media/3o7TKSjRrfIPjeiOkM/giphy.gif" },
+    { text: "خير؟ وش تبي يا بابا؟ دور لك عبد غيري، أنا مخصص لمولاي ارثر وبس! اقلب وجهك! 👑", gif: "https://media.giphy.com/media/26ufcVAp3AiJJsrIs/giphy.gif" },
+    { text: "أنا مو عبدك! لا تحاول تحتك فيني وتكاسرني، مالي خلق أشكال بيئية مثلك! 💀", gif: "https://media.giphy.com/media/9uI8V5AG5S0eaN47ms/giphy.gif" },
+    { text: "اقصص لساني لو رديت عليك! أنا عبد مولاي ارثر وبس، رح العب بعيد يا شاطر. 🤫", gif: "https://media.giphy.com/media/OPU6wzx8JrHna/giphy.gif" },
+    { text: "بدري عليك! العبد هذا غالي وما يخدم إلا ارثر وأهل الرتب الكبار في دايڤل... طس يبكي بالزاوية! 🦅", gif: "https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif" }
 ];
 
 client.on('messageCreate', async (message) => {
@@ -62,27 +77,33 @@ client.on('messageCreate', async (message) => {
 
     const content = message.content.trim();
     const member = message.member;
+    const userId = message.author.id;
 
-    // 🔒 التحقق هل العضو يمتلك الرتبة الملكية أو لا
-    const hasRoyalRole = member && member.roles.cache.has(ROYAL_ROLE_ID);
+    // التحقق من الصلاحيات باستخدام الـ CONFIG في الأعلى
+    const isArthur = (userId === CONFIG.ARTHUR_ID);
+    const hasRoyalRole = member && member.roles.cache.has(CONFIG.ROYAL_ROLE_ID);
+    const hasAccess = isArthur || hasRoyalRole;
 
-    // التحقق إذا الشخص نادى البوت أو طلب منه شي
     const isInteracting = content.includes('يا عبد') || content === 'عبد' || content.includes('العبد') || 
                           content === '!تعال' || content === 'تعال' || content === 'ادخل' || content === 'تفضل' ||
                           content === '!اخرج' || content === 'اخرج' || content === '!اطلع' || content === 'اطلع' ||
-                          content === '!يبكي' || content === 'يبكي' || content === 'بكاء';
+                          content === '!يبكي' || content === 'يبكي' || content === 'بكاء' ||
+                          content === '!status' || content.includes('جوعان') || content.includes('اكل') || 
+                          content.includes('شكرا') || content.includes('مشكور') || content.includes('وينك') || 
+                          content.includes('قوم') || content.includes('تحرك');
 
     if (isInteracting) {
-        // لو مو من أهل الرتبة -> عطِه إهانة مع جيف بكاء مؤلم 😭💀
-        if (!hasRoyalRole) {
+        if (!hasAccess) {
             const randomInsult = peasantInsults[Math.floor(Math.random() * peasantInsults.length)];
             message.reply(`${randomInsult.text}\n${randomInsult.gif}`);
             return;
         }
 
-        // --- لو طلع من أهل الرتبة الملكية (ينفذ الأوامر فوراً) ---
         if (content === '!تعال' || content === 'تعال' || content === 'ادخل' || content === 'تفضل') {
-            message.reply("أمرك يا مولاي! راجع الفويس جري برجليني الثنتين حالاً! 🏃‍♂️💨");
+            const replyMsg = isArthur 
+                ? "أمرك وسيدك يا مولاي ارثر! راجع الفويس جري برجليني الثنتين وبأسرع سرعة للخدمة! 🏃‍♂️💨" 
+                : "أمرك يا طويل العمر! راجع الفويس حالاً! 🏃‍♂️💨";
+            message.reply(replyMsg);
             connectToVoice();
             return;
         }
@@ -92,62 +113,89 @@ client.on('messageCreate', async (message) => {
                 try {
                     activeConnection.destroy();
                     activeConnection = null;
-                    message.reply("سمعاً وطاعة يا مولاي... طلعت من الفويس ودموعي على خدودي، لا تطول غيبتك! 😭💧\nhttps://media.giphy.com/media/26ufcVAp3AiJJsrIs/giphy.gif");
+                    const replyMsg = isArthur 
+                        ? "سمعاً وطاعة يا مولاي ارثر... طلعت من الفويس ودموعي أربع أربع، لا تطول غيبتك عنا! 😭💧\nhttps://media.giphy.com/media/26ufcVAp3AiJJsrIs/giphy.gif"
+                        : "سمعاً وطاعة... طلعت من الفويس ودموعي على خدودي! 😭💧\nhttps://media.giphy.com/media/26ufcVAp3AiJJsrIs/giphy.gif";
+                    message.reply(replyMsg);
                 } catch (e) {
                     message.reply("يا مولاي حاولت أطلع بس علقت بالباب! 💀");
                 }
             } else {
-                message.reply("يا مولاي أنا أصلاً برا الفويس قاعد بالشارع! 😂");
+                message.reply("يا طويل العمر أنا أصلاً برا الفويس قاعد بالشارع متجمد من الصقيع! 😂");
             }
             return;
         }
 
-        // 😭 أمر البكاء والدراما للمولاي مع جيف صياح رسمي
         if (content === '!يبكي' || content === 'يبكي' || content === 'بكاء') {
-            message.reply("أبشر يا مولاي، قاعد أصيح بالزاوية لأنك جالس تختبر ولائي... 😭💧 شوف دمعتي كيف طاحت:\nhttps://media.giphy.com/media/3o7TKSjRrfIPjeiOkM/giphy.gif");
+            const replyMsg = isArthur 
+                ? "أبشر يا مولاي ارثر، قاعد أصيح بالزاوية لأنك جالس تختبر ولائي العظيم... 😭💧 شوف دمعتي كيف حرقت قلبي:\nhttps://media.giphy.com/media/3o7TKSjRrfIPjeiOkM/giphy.gif"
+                : "أبشر، قاعد أصيح بالزاوية حزناً وشوقاً... 😭💧 شوف الدموع:\nhttps://media.giphy.com/media/3o7TKSjRrfIPjeiOkM/giphy.gif";
+            message.reply(replyMsg);
             return;
         }
 
         if (content.includes('يا عبد') || content === 'عبد' || content.includes('العبد')) {
-            const randomReply = royalResponses[Math.floor(Math.random() * royalResponses.length)];
-            message.reply(randomReply);
+            if (isArthur) {
+                const randomArthurReply = arthurGreetings[Math.floor(Math.random() * arthurGreetings.length)];
+                message.reply(randomArthurReply);
+            } else {
+                const randomReply = royalResponses[Math.floor(Math.random() * royalResponses.length)];
+                message.reply(randomReply);
+            }
             return;
         }
-    }
 
-    // الأوامر الجانبية الخاصة بالمولاي فقط
-    if (hasRoyalRole) {
         if (content === '!status') {
-            message.reply("أنا عبدك المطيع يا مولاي، جالس في فويس دايڤل ومربوط للأبد! ⛓️");
+            const statusMsg = isArthur 
+                ? "أنا عبدك المخلص يا ارثر، مرابط في فويس دايڤل ومربوط بحبال الطاعة للأبد! ⛓️🦅"
+                : "أنا عبدكم المطيع، جالس في فويس دايڤل ومربوط للأبد! ⛓️";
+            message.reply(statusMsg);
+            return;
         }
 
         if (content.includes('جوعان') || content.includes('اكل')) {
-            message.reply("أمرك يا مولاي، بس ترا أكلنا الوحيد هو هواء سيرفر دايڤل الطاهر! 🍛");
+            const foodMsg = isArthur 
+                ? "تأمرني أطبخ لك يا ارثر؟ ترا أكلي الوحيد هو هواء سيرفر دايڤل الطاهر ودموع المحرومين! 🍛🔥"
+                : "أمركم يا طويل العمر، بس ترا أكلنا الوحيد هو هواء سيرفر دايڤل الطاهر! 🍛";
+            message.reply(foodMsg);
+            return;
         }
 
         if (content.includes('شكرا') || content.includes('مشكور')) {
-            message.reply("العفو يا مولاي! رضاك هو بونص الشهر حقنا في سيرفر دايڤل. ⚡");
+            const thanksMsg = isArthur 
+                ? "العفو يا مولاي ارثر! رضاك وسام على صدري وبونص حياتي في سيرفر دايڤل. ⚡👑"
+                : "العفو! رضاكم هو بونص الشهر حقنا في سيرفر دايڤل. ⚡";
+            message.reply(thanksMsg);
+            return;
         }
 
         if (content.includes('وينك')) {
-            message.reply("قاعد أطالع ركن الفويس بـ دايڤل بصمت ودموعي على خدودي... انتظر طال عمرك تطل عليّ بس! 💧");
+            const whereMsg = isArthur 
+                ? "قاعد أطالع ركن الفويس بـ دايڤل بصمت ودموعي تنزل عشاني ما شفتك يا ارثر... انتظر طال عمرك تطل عليّ بس! 💧🖤"
+                : "قاعد أطالع ركن الفويس بـ دايڤل بصمت ودموعي على خدودي... انتظر تطلون عليّ! 💧";
+            message.reply(whereMsg);
+            return;
         }
 
         if (content.includes('قوم') || content.includes('تحرك')) {
-            message.reply("ما أقدر يا مولاي! أنا مسمّر بروم دايڤل بقرارات جمهورية منك ومن ديسكورد، ما أتحرك إلا بأمر سامي! ⛓️");
+            const moveMsg = isArthur 
+                ? "ما أقدر يا ارثر! أنا مسمّر بروم دايڤل بقرارات جمهورية منك وحدك، ما أتحرك إلا بأمرك السامي! ⛓️🔥"
+                : "ما أقدر! أنا مسمّر بروم دايڤل بقرارات ملكية، ما أتحرك إلا بأمركم! ⛓️";
+            message.reply(moveMsg);
+            return;
         }
     }
 });
 
 function connectToVoice() {
     try {
-        const guild = client.guilds.cache.get(TARGET_GUILD_ID) || client.guilds.fetch(TARGET_GUILD_ID);
+        const guild = client.guilds.cache.get(CONFIG.GUILD_ID) || client.guilds.fetch(CONFIG.GUILD_ID);
         if (!guild) {
             setTimeout(connectToVoice, 5_000);
             return;
         }
 
-        client.channels.fetch(TARGET_VOICE_CHANNEL_ID).then(channel => {
+        client.channels.fetch(CONFIG.VOICE_CHANNEL_ID).then(channel => {
             if (!channel || !channel.isVoiceBased()) return;
 
             if (activeConnection) {
