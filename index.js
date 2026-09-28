@@ -344,7 +344,10 @@ client.on('messageCreate', async (message) => {
 });
 
 // ====================================================================================
-// 🎧 11. وظيفة الاتصال التلقائي بالفويس وإدارة حالات الاتصال والانقطاع
+
+
+// ====================================================================================
+// 🎧 11. وظيفة الاتصال التلقائي بالفويس وإدارة حالات الاتصال والانقطاع (النسخة المحدثة والثابتة)
 // ====================================================================================
 function connectToVoice() {
     try {
@@ -375,16 +378,19 @@ function connectToVoice() {
                 setTimeout(connectToVoice, 3_000);
             });
 
-            activeConnection.on(VoiceConnectionStatus.Disconnected, async () => {
+            // نظام مراقبة الانقطاع المطور لمعرفة سبب الخروج بدقة
+            activeConnection.on(VoiceConnectionStatus.Disconnected, async (oldState, newState) => {
+                console.log(`⚠️ تنبيه: انقطع اتصال البوت عن الفويس في دايڤل! السبب المحتمل: انتقال الحالة من ${oldState} إلى ${newState}`);
                 try {
                     await Promise.race([
                         entersState(activeConnection, VoiceConnectionStatus.Signalling, 5_000),
                         entersState(activeConnection, VoiceConnectionStatus.Connecting, 5_000),
                     ]);
+                    console.log("✅ تم استعادة الاتصال الصوتي بنجاح!");
                 } catch (error) {
-                    console.log("🔄 تم فصل البوت، جاري إرجاعه للفويس فوراً...");
+                    console.log("🔄 فشل الاتصال التلقائي، جاري إرجاع البوت لروم الفويس فوراً يا مولاي...");
                     try { activeConnection.destroy(); } catch (e) {}
-                    setTimeout(connectToVoice, 3_000);
+                    setTimeout(connectToVoice, 2_000);
                 }
             });
 
@@ -397,14 +403,6 @@ function connectToVoice() {
         setTimeout(connectToVoice, 10_000);
     }
 }
-
-// ====================================================================================
-// 🛡️ 12. حماية الأخطاء وتسجيل الدخول النهائي للبوت
-// ====================================================================================
-process.on('unhandledRejection', error => {});
-
-client.login(process.env.DISCORD_TOKEN);
-
 // ====================================================================================
 // 🔥 13. قسم الفعاليات والنكت الخاصة بسيرفر دايڤل (أوامر تفاعلية إضافية)
 // ====================================================================================
