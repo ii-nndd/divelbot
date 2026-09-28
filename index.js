@@ -3,12 +3,12 @@ const { joinVoiceChannel, entersState, VoiceConnectionStatus } = require('@disco
 const express = require('express');
 require('dotenv').config();
 
-// سيرفر ويب بسيط عشان ريندر ما يطفي البوت أبداً
+// سيرفر ويب عشان ريندر
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get('/', (req, res) => {
-    res.send('Voice Keeper Bot is running 24/7 in voice channel!');
+    res.send('Voice Keeper Bot is running 24/7!');
 });
 
 app.listen(PORT, () => {
@@ -30,43 +30,57 @@ client.once('ready', async () => {
     connectToVoice();
 });
 
-async function connectToVoice() {
+function connectToVoice() {
     try {
-        const guild = await client.guilds.fetch(TARGET_GUILD_ID);
+        const guild = client.guilds.cache.get(TARGET_GUILD_ID) || client.guilds.fetch(TARGET_GUILD_ID);
         if (!guild) {
-            console.log("❌ لم يتم العثور على السيرفر!");
+            setTimeout(connectToVoice, 5_000);
             return;
         }
 
-        const channel = await guild.channels.fetch(TARGET_VOICE_CHANNEL_ID);
-        if (!channel || !channel.isVoiceBased()) {
-            console.log("❌ الروم الصوتي غير موجود أو الآيدي خطأ!");
-            return;
-        }
+        client.channels.fetch(TARGET_VOICE_CHANNEL_ID).then(channel => {
+            if (!channel || !channel.isVoiceBased()) return;
 
-        const connection = joinVoiceChannel({
-            channelId: channel.id,
-            guildId: guild.id,
-            adapterCreator: guild.voiceAdapterCreator,
-        });
+            const connection = joinVoiceChannel({
+                channelId: channel.id,
+                guildId: channel.guild.id,
+                adapterCreator: channel.guild.voiceAdapterCreator,
+                selfDeaf: false,
+                selfMute: true
+            });
 
-        connection.on(VoiceConnectionStatus.Disconnected, async () => {
-            try {
-                await Promise.race([
-                    entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
-                    entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
-                ]);
-            } catch (error) {
-                connection.destroy();
+            // معالجة أخطاء الاتصال وصدمات الشبكة لمنع الانهيار
+            connection.on('error', (error) => {
+                console.log("⚠️ خطأ في الاتصال الصوتي، جاري إعادة المحاولة...", error.message);
+                try { connection.destroy(); } catch (e) {}
                 setTimeout(connectToVoice, 5_000);
-            }
+            });
+
+            connection.on(VoiceConnectionStatus.Disconnected, async () => {
+                try {
+                    await Promise.race([
+                        entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
+                        entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
+                    ]);
+                } catch (error) {
+                    try { connection.destroy(); } catch (e) {}
+                    setTimeout(connectToVoice, 5_000);
+                }
+            });
+
+            console.log(`✅ البوت دخل روم الصوت بنجاح: ${channel.name}`);
+        }).catch(err => {
+            setTimeout(connectToVoice, 5_000);
         });
 
-        console.log(`✅ البوت دخل روم الصوت وثبت فيه بنجاح: ${channel.name}`);
     } catch (error) {
-        console.error("خطأ في الاتصال الصوتي:", error);
         setTimeout(connectToVoice, 10_000);
     }
 }
+
+// منع انهيار التطبيق تماماً لو حصل خطأ غير متوقع بالشبكة
+process.on('unhandledRejection', error => {
+    // تجاهل أخطاء الـ IP discovery المؤقتة
+});
 
 client.login(process.env.DISCORD_TOKEN);
