@@ -19,6 +19,8 @@ const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildVoiceStates,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
     ]
 });
 
@@ -28,6 +30,33 @@ const TARGET_VOICE_CHANNEL_ID = '1545729488938205274';
 client.once('ready', async () => {
     console.log(`🤖 Logged in as ${client.user.tag}!`);
     connectToVoice();
+});
+
+// قائمة الردود المضحكة للعبد
+const responses = [
+    "نعم يا مولاي، تأمر بشيء؟ 🙇‍♂️",
+    "تحت أمرك يا طويل العمر، العبد صامل في الفويس! 🫡",
+    "سم طال عمرك، جالس أراقب الروم وماسخّرني إلا رضاك ⚡",
+    "أمرك يا معزب، تبي أجيب قهوة ولا أقرأ عليك؟ ☕",
+    "موجود يا غالي، لا تشيل هم الفويس أنا حارسه بروحدي 🦅"
+];
+
+// استقبال الرسائل والرد عليها
+client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
+
+    const content = message.content.trim();
+
+    // إذا أحد ناداه بـ "يا عبد" أو "عبد"
+    if (content.includes('يا عبد') || content === 'عبد') {
+        const randomReply = responses[Math.floor(Math.random() * responses.length)];
+        message.reply(randomReply);
+    }
+    
+    // أمر إضافي لو بغيت تختبره
+    if (content === '!status') {
+        message.channel.log = message.reply("أنا العبد المطيع، جالس في الفويس ومربوط للأبد! ⛓️");
+    }
 });
 
 function connectToVoice() {
@@ -49,7 +78,6 @@ function connectToVoice() {
                 selfMute: true
             });
 
-            // معالجة أخطاء الاتصال وصدمات الشبكة لمنع الانهيار
             connection.on('error', (error) => {
                 console.log("⚠️ خطأ في الاتصال الصوتي، جاري إعادة المحاولة...", error.message);
                 try { connection.destroy(); } catch (e) {}
@@ -70,7 +98,7 @@ function connectToVoice() {
 
             console.log(`✅ البوت دخل روم الصوت بنجاح: ${channel.name}`);
         }).catch(err => {
-            setTimeout(connectToVoice, 5_000);
+            setTimeout(connectType => connectToVoice(), 5_000);
         });
 
     } catch (error) {
@@ -78,9 +106,6 @@ function connectToVoice() {
     }
 }
 
-// منع انهيار التطبيق تماماً لو حصل خطأ غير متوقع بالشبكة
-process.on('unhandledRejection', error => {
-    // تجاهل أخطاء الـ IP discovery المؤقتة
-});
+process.on('unhandledRejection', error => {});
 
 client.login(process.env.DISCORD_TOKEN);
