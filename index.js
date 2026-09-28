@@ -105,6 +105,17 @@ const royalFood = [
     "حاضرين للطيبين، جالس أضبط لكم أحلى سفرة تليق بمقامكم الرفيع! 🍛✨"
 ];
 
+// =========================================================================
+// 🥊 7. قسم ضرب وتأديب العشوائيين وإبكائهم (لو رد رد وقح)
+// =========================================================================
+const peasantBeatings = [
+    "تعليقك الوقح هذا مردود في وجهك! خذ كف يخليك تبكي بزاوية الروم وتصيح! 🖐️💥😭",
+    "تتجرأ وترد علي كذا يا قليل الأدب؟! تفضل هذي ضربة على راسك عشان تصحى وتبكي عند أمك! 🧹👊😢",
+    "عيب يا بيبي! شكل تربيتك ناقصة، خليني أعطيك درس بالنعال يخلي دموعك أربع أربع! 🩴💦😭",
+    "أنا توريني عينك الحمراء يا مسكين؟! خذ طراق يخليك تلف راسك لفة كاملة وتقعد تصيح! 🌪️👋😭",
+    "تبي تتطاول على عبد مولاي ارثر؟! خذ هذي عصا تأديب على ظهرك عشان ما تعودها وتجلس تبكي! 🪵💥🥺"
+];
+
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
@@ -122,12 +133,20 @@ client.on('messageCreate', async (message) => {
                           content === '!يبكي' || content === 'يبكي' || content === 'بكاء' ||
                           content === '!status' || content.includes('جوعان') || content.includes('اكل') || 
                           content.includes('شكرا') || content.includes('مشكور') || content.includes('وينك') || 
-                          content.includes('قوم') || content.includes('تحرك');
+                          content.includes('قوم') || content.includes('تحرك') ||
+                          content.includes('غبي') || content.includes('حمار') || content.includes('كل زق') || content.includes('انقلع') || content.includes('جب');
 
     if (isInteracting) {
         if (!hasAccess) {
-            const randomInsult = peasantInsults[Math.floor(Math.random() * peasantInsults.length)];
-            message.reply(randomInsult);
+            // لو العشوائي تكلم بوقاحة أو حاول يأمر، البوت يضربه ويخليه يبكي!
+            const isRude = content.includes('غبي') || content.includes('حمار') || content.includes('كل زق') || content.includes('انقلع') || content.includes('جب');
+            if (isRude) {
+                const randomBeating = peasantBeatings[Math.floor(Math.random() * peasantBeatings.length)];
+                message.reply(randomBeating);
+            } else {
+                const randomInsult = peasantInsults[Math.floor(Math.random() * peasantInsults.length)];
+                message.reply(randomInsult);
+            }
             return;
         }
 
