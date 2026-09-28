@@ -26,12 +26,14 @@ const client = new Client({
 const TARGET_GUILD_ID = '1545100203751645224';
 const TARGET_VOICE_CHANNEL_ID = '1545729488938205274';
 
+let activeConnection = null; // للتحكم باتصال الفويس (دخول وخروج)
+
 client.once('ready', async () => {
     console.log(`🤖 Logged in as ${client.user.tag}!`);
     connectToVoice();
 });
 
-// لستة الردود اللي تليق بمقامك وتفخر بسيرفر "دايڤل" الملكي 😂
+// لستة الردود الملكية والطاعة العمياء في سيرفر دايڤل
 const responses = [
     "نعم يا مولاي، تأمر بشيء يطال عمرك في سيرفر دايڤل؟ 🙇‍♂️",
     "تسمع صوتي يا مولاي؟ أنا حارس الفويس الشخصي في دايڤل تحت أمرك! 🫡",
@@ -51,6 +53,29 @@ client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
     const content = message.content.trim();
+
+    // أمر السحب الإجباري للفويس 🏃‍♂️
+    if (content === '!تعال' || content === 'تعال' || content === 'ادخل' || content === 'تفضل') {
+        message.reply("أمرك يا مولاي! راجع الفويس جري برجليني الثنتين حالاً! 🏃‍♂️💨");
+        connectToVoice();
+        return;
+    }
+
+    // أمر الطرد والخروج من الفويس 🚪
+    if (content === '!اخرج' || content === 'اخرج' || content === '!اطلع' || content === 'اطلع') {
+        if (activeConnection) {
+            try {
+                activeConnection.destroy();
+                activeConnection = null;
+                message.reply("سمعاً وطاعة يا مولاي... طلعت من الفويس ودموعي على خدودي، لا تطول غيبتك! 😭💧");
+            } catch (e) {
+                message.reply("يا مولاي حاولت أطلع بس علقت بالباب! 💀");
+            }
+        } else {
+            message.reply("يا مولاي أنا أصلاً برا الفويس قاعد بالشارع! 😂");
+        }
+        return;
+    }
 
     if (content.includes('يا عبد') || content === 'عبد' || content.includes('العبد')) {
         const randomReply = responses[Math.floor(Math.random() * responses.length)];
@@ -89,7 +114,11 @@ function connectToVoice() {
         client.channels.fetch(TARGET_VOICE_CHANNEL_ID).then(channel => {
             if (!channel || !channel.isVoiceBased()) return;
 
-            const connection = joinVoiceChannel({
+            if (activeConnection) {
+                try { activeConnection.destroy(); } catch (e) {}
+            }
+
+            activeConnection = joinVoiceChannel({
                 channelId: channel.id,
                 guildId: channel.guild.id,
                 adapterCreator: channel.guild.voiceAdapterCreator,
@@ -97,21 +126,21 @@ function connectToVoice() {
                 selfMute: true
             });
 
-            connection.on('error', (error) => {
+            activeConnection.on('error', (error) => {
                 console.log("⚠️ خطأ في الاتصال الصوتي، جاري إعادة المحاولة...", error.message);
-                try { connection.destroy(); } catch (e) {}
+                try { activeConnection.destroy(); } catch (e) {}
                 setTimeout(connectToVoice, 5_000);
             });
 
-            connection.on(VoiceConnectionStatus.Disconnected, async () => {
+            activeConnection.on(VoiceConnectionStatus.Disconnected, async () => {
                 try {
                     await Promise.race([
-                        entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
-                        entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
+                        entersState(activeConnection, VoiceConnectionStatus.Signalling, 5_000),
+                        entersState(activeConnection, VoiceConnectionStatus.Connecting, 5_000),
                     ]);
                 } catch (error) {
-                    try { connection.destroy(); } catch (e) {}
-                    setTimeout(connectToVoice, 5_000);
+                    try { activeConnection.destroy(); } catch (e) {}
+                    // ملاحظة: لو انت طردته بـ !اخرج ما رح يرجع تلقائي، لكن لو فصل لوحده يرجع!
                 }
             });
 
