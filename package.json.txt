@@ -1,0 +1,18 @@
+{
+  "name": "voice-keeper-bot",
+  "version": "1.0.0",
+  "description": "Discord Voice Keeper Bot",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@discordjs/opus": "latest",
+    "@discordjs/rest": "latest",
+    "@discordjs/voice": "latest",
+    "discord.js": "latest",
+    "dotenv": "latest",
+    "express": "latest",
+    "opusscript": "latest"
+  }
+}

@@ -1,0 +1,72 @@
+const { Client, GatewayIntentBits } = require('discord.js');
+const { joinVoiceChannel, entersState, VoiceConnectionStatus } = require('@discordjs/voice');
+const express = require('express');
+require('dotenv').config();
+
+// سيرفر ويب بسيط عشان ريندر ما يطفي البوت أبداً
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+    res.send('Voice Keeper Bot is running 24/7 in voice channel!');
+});
+
+app.listen(PORT, () => {
+    console.log(`🌐 Web server is running on port ${PORT}`);
+});
+
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildVoiceStates,
+    ]
+});
+
+const TARGET_GUILD_ID = '1545100203751645224';
+const TARGET_VOICE_CHANNEL_ID = '1545729488938205274';
+
+client.once('ready', async () => {
+    console.log(`🤖 Logged in as ${client.user.tag}!`);
+    connectToVoice();
+});
+
+async function connectToVoice() {
+    try {
+        const guild = await client.guilds.fetch(TARGET_GUILD_ID);
+        if (!guild) {
+            console.log("❌ لم يتم العثور على السيرفر!");
+            return;
+        }
+
+        const channel = await guild.channels.fetch(TARGET_VOICE_CHANNEL_ID);
+        if (!channel || !channel.isVoiceBased()) {
+            console.log("❌ الروم الصوتي غير موجود أو الآيدي خطأ!");
+            return;
+        }
+
+        const connection = joinVoiceChannel({
+            channelId: channel.id,
+            guildId: guild.id,
+            adapterCreator: guild.voiceAdapterCreator,
+        });
+
+        connection.on(VoiceConnectionStatus.Disconnected, async () => {
+            try {
+                await Promise.race([
+                    entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
+                    entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
+                ]);
+            } catch (error) {
+                connection.destroy();
+                setTimeout(connectToVoice, 5_000);
+            }
+        });
+
+        console.log(`✅ البوت دخل روم الصوت وثبت فيه بنجاح: ${channel.name}`);
+    } catch (error) {
+        console.error("خطأ في الاتصال الصوتي:", error);
+        setTimeout(connectToVoice, 10_000);
+    }
+}
+
+client.login(process.env.DISCORD_TOKEN);
