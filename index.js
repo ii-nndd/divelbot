@@ -48,13 +48,13 @@ const royalResponses = [
     "أبشر يا مولاي، فويس دايڤل آمن ومحد يقدر يدخله طول ما أنا جالس فيه! 🦅"
 ];
 
-// لستة الإهانات وتصريف العشوائيين اللي بدون رتبة 💅😂
+// لستة إهانات وبكاء العشوائيين مع جيفات صياح حقيقية 😭💅
 const peasantInsults = [
-    "أنا مش عبدك! انقلع يا مسكين، أنا ما أخدم إلا صاحب الرتبة الملكية في دايڤل! 💅😂",
-    "خير؟ وش تبي يا بابا؟ دور لك عبد غيري، أنا مخصص لمولاي وبس! 👑🚫",
-    "أنا مو عبدك! لا تحاول تحتك فيني وتكاسرني، مالي خلق تصريفات ترا! 💀",
-    "اقصص لساني لو رديت عليك! أنا عبد مولاي وبس، رح العب بعيد يا شاطر. 🤫",
-    "بدري عليك! العبد هذا غالي وما يخدم إلا أهل الرتب الكبار في دايڤل. 🦅🔥"
+    { text: "أنا مش عبدك! انقلع يا مسكين، أنا ما أخدم إلا صاحب الرتبة الملكية في دايڤل! 💅😂", gif: "https://media.giphy.com/media/3o7TKSjRrfIPjeiOkM/giphy.gif" },
+    { text: "خير؟ وش تبي يا بابا؟ دور لك عبد غيري، أنا مخصص لمولاي وبس! 👑", gif: "https://media.giphy.com/media/26ufcVAp3AiJJsrIs/giphy.gif" },
+    { text: "أنا مو عبدك! لا تحاول تحتك فيني وتكاسرني، مالي خلق تصريفات ترا! 💀", gif: "https://media.giphy.com/media/9uI8V5AG5S0eaN47ms/giphy.gif" },
+    { text: "اقصص لساني لو رديت عليك! أنا عبد مولاي وبس، رح العب بعيد يا شاطر. 🤫", gif: "https://media.giphy.com/media/OPU6wzx8JrHna/giphy.gif" },
+    { text: "بدري عليك! العبد هذا غالي وما يخدم إلا أهل الرتب الكبار في دايڤل... طس يبكي! 🦅", gif: "https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif" }
 ];
 
 client.on('messageCreate', async (message) => {
@@ -69,13 +69,14 @@ client.on('messageCreate', async (message) => {
     // التحقق إذا الشخص نادى البوت أو طلب منه شي
     const isInteracting = content.includes('يا عبد') || content === 'عبد' || content.includes('العبد') || 
                           content === '!تعال' || content === 'تعال' || content === 'ادخل' || content === 'تفضل' ||
-                          content === '!اخرج' || content === 'اخرج' || content === '!اطلع' || content === 'اطلع';
+                          content === '!اخرج' || content === 'اخرج' || content === '!اطلع' || content === 'اطلع' ||
+                          content === '!يبكي' || content === 'يبكي' || content === 'بكاء';
 
     if (isInteracting) {
-        // لو مو من أهل الرتبة -> عطِه إهانة وتصريفة فوراً! 💀
+        // لو مو من أهل الرتبة -> عطِه إهانة مع جيف بكاء مؤلم 😭💀
         if (!hasRoyalRole) {
             const randomInsult = peasantInsults[Math.floor(Math.random() * peasantInsults.length)];
-            message.reply(randomInsult);
+            message.reply(`${randomInsult.text}\n${randomInsult.gif}`);
             return;
         }
 
@@ -91,13 +92,19 @@ client.on('messageCreate', async (message) => {
                 try {
                     activeConnection.destroy();
                     activeConnection = null;
-                    message.reply("سمعاً وطاعة يا مولاي... طلعت من الفويس ودموعي على خدودي، لا تطول غيبتك! 😭💧");
+                    message.reply("سمعاً وطاعة يا مولاي... طلعت من الفويس ودموعي على خدودي، لا تطول غيبتك! 😭💧\nhttps://media.giphy.com/media/26ufcVAp3AiJJsrIs/giphy.gif");
                 } catch (e) {
                     message.reply("يا مولاي حاولت أطلع بس علقت بالباب! 💀");
                 }
             } else {
                 message.reply("يا مولاي أنا أصلاً برا الفويس قاعد بالشارع! 😂");
             }
+            return;
+        }
+
+        // 😭 أمر البكاء والدراما للمولاي مع جيف صياح رسمي
+        if (content === '!يبكي' || content === 'يبكي' || content === 'بكاء') {
+            message.reply("أبشر يا مولاي، قاعد أصيح بالزاوية لأنك جالس تختبر ولائي... 😭💧 شوف دمعتي كيف طاحت:\nhttps://media.giphy.com/media/3o7TKSjRrfIPjeiOkM/giphy.gif");
             return;
         }
 
