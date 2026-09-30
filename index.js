@@ -10,7 +10,7 @@ const CONFIG = {
 };
 
 const { Client, GatewayIntentBits } = require('discord.js');
-const { joinVoiceChannel, entersState, VoiceConnectionStatus } = require('@discordjs/voice');
+const { joinVoiceChannel } = require('@discordjs/voice');
 const express = require('express');
 require('dotenv').config();
 
@@ -38,7 +38,7 @@ let activeConnection = null;
 
 client.once('ready', async () => {
     console.log(`🤖 Logged in as ${client.user.tag}!`);
-    connectToVoice();
+    connectToVoice(); // يدخل أول ما يشتغل البوت بشكل طبيعي
 });
 
 // ====================================================================================
@@ -203,7 +203,7 @@ const botBeatingResponses = {
         "آآح يا وجع! تكفون لا تجمعون علي، يكفي رتبتكم وسلطتكم فوق راسي! 🛡️😭"
     ],
     peasantHit: [
-        "تبي تضربني يا مسكين؟! خذ كف يخليك تلف راسك لفة كاملة وتروح تصيح عند أمك! 🖐️💥😂",
+        "تبي تضربني يا مسكين؟! خذ كف يخليك تلف راسك لفة كاملة وتروح تصيح عند أمك! 🖐️️💥😂",
         "هههههههه تحسبني بخاف منك؟ أنت أصلاً ما عندك رتبة، خذ طراق يرجعك لغرفتك! 🩴🌪️",
         "يا حليلك والله، تبي تضرب عبد مولاي ارثر والملكة إيدا؟ انقلع بس لا أعطيك كف يطيرك! 🚷👊",
         "بدري عليك وعلى أشكالك تمد يدك علي، أنا ما يضربني إلا الكبار يا بيبي! طس برا! 💅🔥"
@@ -227,7 +227,42 @@ const secretPoems = [
 ];
 
 // ====================================================================================
-// 🎮 10. معالج الرسائل الرئيسي ومنطق التفاعل الفائق والتحكم الكامل
+// 🎧 10. دوال الاتصال والفصل اليدوي بالفويس
+// ====================================================================================
+function connectToVoice() {
+    try {
+        const guild = client.guilds.cache.get(CONFIG.GUILD_ID);
+        if (!guild) return;
+
+        client.channels.fetch(CONFIG.VOICE_CHANNEL_ID).then(channel => {
+            if (!channel || !channel.isVoiceBased()) return;
+
+            if (activeConnection) {
+                try { activeConnection.destroy(); } catch (e) {}
+            }
+
+            activeConnection = joinVoiceChannel({
+                channelId: channel.id,
+                guildId: channel.guild.id,
+                adapterCreator: channel.guild.voiceAdapterCreator,
+                selfDeaf: false,
+                selfMute: true
+            });
+        }).catch(() => {});
+    } catch (error) {}
+}
+
+function disconnectFromVoice() {
+    if (activeConnection) {
+        try {
+            activeConnection.destroy();
+            activeConnection = null;
+        } catch (e) {}
+    }
+}
+
+// ====================================================================================
+// 🎮 11. معالج الرسائل الرئيسي (يشمل جميع ردودك القديمة + أوامر الدخول والخروج اليدوية)
 // ====================================================================================
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
@@ -240,6 +275,27 @@ client.on('messageCreate', async (message) => {
     const isIdaQueen = (userId === CONFIG.SPECIAL_USER_ID);
     const hasRoyalRole = member && member.roles.cache.has(CONFIG.ROYAL_ROLE_ID);
     const hasAccess = isArthur || isIdaQueen || hasRoyalRole;
+
+    // 🎛️ أوامر التحكم اليدوي بالفويس (دخلني / اطلع)
+    if (content === '!تعال' || content === 'دخلني' || content === 'ادخل') {
+        if (!hasAccess) {
+            message.reply("❌ هذا الأمر خاص بمولاي ارثر والملكة إيدا وأصحاب الرتب بس! 💅");
+            return;
+        }
+        connectToVoice();
+        message.reply("🫡 أبشر يا طويل العمر، دخلت الفويس فوراً بناءً على أمرك السامي! 🎙️");
+        return;
+    }
+
+    if (content === '!اطلع' || content === 'اطلع بره' || content === 'اخرج') {
+        if (!hasAccess) {
+            message.reply("❌ ما تقدر تطردني إلا بأمر من ارثر أو إيدا أو الكبار! 🚷");
+            return;
+        }
+        disconnectFromVoice();
+        message.reply("👋 سمعاً وطاعة، طلعت من الفويس مثل ما أمرت يا طويل العمر! 🚪");
+        return;
+    }
 
     const isHittingBot = content.includes('اضربك') || content.includes('كف') || content.includes('طراق') || content.includes('طق') || content.includes('ادقك') || content.includes('تسطير') || content.includes('ضربك');
 
@@ -357,67 +413,6 @@ client.on('messageCreate', async (message) => {
             const poem = secretPoems[Math.floor(Math.random() * secretPoems.length)];
             message.reply(poem);
             return;
-        }
-    }
-});
-
-// ====================================================================================
-// 🎧 11. وظيفة الاتصال التلقائي بالفويس وإدارة حالات الاتصال والانقطاع (مع حراسة ذاتية)
-// ====================================================================================
-function connectToVoice() {
-    try {
-        const guild = client.guilds.cache.get(CONFIG.GUILD_ID);
-        if (!guild) {
-            setTimeout(connectToVoice, 5_000);
-            return;
-        }
-
-        client.channels.fetch(CONFIG.VOICE_CHANNEL_ID).then(channel => {
-            if (!channel || !channel.isVoiceBased()) return;
-
-            if (activeConnection) {
-                try { activeConnection.destroy(); } catch (e) {}
-            }
-
-            activeConnection = joinVoiceChannel({
-                channelId: channel.id,
-                guildId: channel.guild.id,
-                adapterCreator: channel.guild.voiceAdapterCreator,
-                selfDeaf: false,
-                selfMute: true
-            });
-
-            activeConnection.on('error', (error) => {
-                try { activeConnection.destroy(); } catch (e) {}
-                setTimeout(connectToVoice, 3_000);
-            });
-
-            activeConnection.on(VoiceConnectionStatus.Disconnected, async () => {
-                try {
-                    await entersState(activeConnection, VoiceConnectionStatus.Signalling, 5_000);
-                } catch (error) {
-                    try { activeConnection.destroy(); } catch (e) {}
-                    setTimeout(connectToVoice, 2_000);
-                }
-            });
-        }).catch(() => {
-            setTimeout(connectToVoice, 5_000);
-        });
-
-    } catch (error) {
-        setTimeout(connectToVoice, 10_000);
-    }
-}
-
-// 🛡️ [إضافة هامة] حراسة ذاتية إضافية: لو البوت طلع أو انفصل عن الفويس لأي سبب، يرجع يدخل تلقائياً خلال 5 ثواني
-client.on('voiceStateUpdate', (oldState, newState) => {
-    if (oldState.member && oldState.member.id === client.user.id) {
-        // إذا كان البوت هو اللي طلع أو انطرد من الفويس المستهدف
-        if (oldState.channelId && !newState.channelId) {
-            console.log('⚠️ ملاحظة: البوت خرج من الفويس، جاري إعادة الاتصال الفوري...');
-            setTimeout(() => {
-                connectToVoice();
-            }, 5000);
         }
     }
 });
