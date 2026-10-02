@@ -332,7 +332,7 @@ client.on('interactionCreate', async (interaction) => {
                     '🎮 **ترفيه:** `/نكتة` `/نرد` `/عملة` `/اختار` `/حجر` `/تخمين` `/حب` `/كرة` `/سرعة` `/رياضيات` `/مبعثرة` `/اعلام` `/نقاطي` `/المتصدرين`\n' +
                     '📊 **عام:** `/حالة` `/بينج` `/فلوس` `/سيرفر`\n' +
                     '🛡️ **إدارة:** `/طرد` `/حظر` `/فك_حظر` `/ميوت` `/فك_ميوت` `/مسح` `/قفل` `/فتح` `/بطيء` `/رتبة_اضافة` `/رتبة_ازالة` `/لقب` `/صوت` `/نقل` `/اعلان` `/تحذير` `/تحذيرات` `/معلومات_عضو` `/معلومات_سيرفر`\n' +
-                    '💬 وتقدر تناديني بـ **يا عبد** وأرد عليك!'
+                    '💬 أو نادني بالكلام: **يا عبد نكتة** / **يا عبد سرعة** / **يا عبد نقاطي** / **يا عبد نرد 20**، أو ارد على رسالتي واكتب الأمر. أوامر الإدارة بالسلاش فقط.'
                 );
         }
     } catch (err) {
@@ -360,6 +360,30 @@ function tokenize(text) {
     return text.replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
 }
 
+// توحيد النص العربي (أ/إ/آ=ا، ة=ه، ى=ي، بدون تشكيل) لمطابقة الأوامر
+const nz = (t) => t.replace(/[\u064B-\u0652\u0640]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').toLowerCase();
+
+// يحوّل رسالة عادية لشكل شبيه بالسلاش عشان نستخدم نفس كود الألعاب والنقاط
+const asInteraction = (message, name) => ({
+    commandName: name, client, channel: message.channel, guild: message.guild,
+    user: message.author, member: message.member, replied: false, deferred: false,
+    options: { getUser: () => null, getInteger: () => null, getString: () => null },
+    reply: (o) => message.reply(typeof o === 'string' ? o : { ...o, flags: undefined })
+});
+
+const TEXT_GAMES = { 'سرعه': 'سرعة', 'رياضيات': 'رياضيات', 'مبعثره': 'مبعثرة', 'اعلام': 'اعلام' };
+
+// البوت ينادى فقط بـ: يا عبد / عبد / منشن / الرد على رسالته
+async function isCalled(message, tokens, content) {
+    if (message.mentions.has(client.user, { ignoreEveryone: true, ignoreRoles: true }) ||
+        content.includes('يا عبد') || tokens.includes('عبد') || tokens.includes('العبد')) return true;
+    if (message.reference && message.reference.messageId) {
+        const ref = await message.fetchReference().catch(() => null);
+        return !!ref && ref.author.id === client.user.id;
+    }
+    return false;
+}
+
 client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.guild) return;
     points.onMessage(message, getTier(message.author.id, message.member)).catch(() => {});
@@ -368,48 +392,79 @@ client.on('messageCreate', async (message) => {
     if (!content) return;
 
     const tokens = tokenize(content);
-    const tier = getTier(message.author.id, message.member);
-    const called =
-        message.mentions.has(client.user) ||
-        content.includes('يا عبد') ||
-        tokens.includes('عبد') ||
-        tokens.includes('العبد');
+    if (!(await isCalled(message, tokens, content))) return;   // بدون نداء: ما يرد أبداً
+    if (onCooldown(message.author.id)) return;
 
-    // الكلمات الخاصة (من لوحة التحكم): ارثر وإيدا والرتبة بدون مناداة، والعام عند المناداة
-    const rules = [];
-    if (tier !== 'peasant') rules.push(...R.get('custom.' + tier));
-    if (called && tier !== 'peasant') rules.push(...R.get('custom.all'));
-    const matches = rules
-        .map(l => l.split('=>').map(x => x.trim()))
-        .filter(([w, r]) => w && r && content.includes(w));
-    if (matches.length) {
-        if (!onCooldown(message.author.id)) message.reply(pick(matches)[1]);
-        return;
+    const tier = getTier(message.author.id, message.member);
+    const access = hasAccess(tier);
+    const ctx = { getTier, CONFIG, pick };
+    const ntok = tokens.map(nz).filter(t => !['يا', 'عبد', 'العبد'].includes(t));
+    const w = (...list) => ntok.some(t => list.includes(t));
+    const deny = () => message.reply('❌ هذا الأمر خاص بمولاي ارثر والملكة إيدا وأصحاب الرتب بس! 💅');
+
+    // الكلمات الخاصة (من اللوحة)
+    if (access) {
+        const matches = [...R.get('custom.' + tier), ...R.get('custom.all')]
+            .map(l => l.split('=>').map(x => x.trim()))
+            .filter(([k, r]) => k && r && content.includes(k));
+        if (matches.length) return message.reply(pick(matches)[1]);
     }
 
-    if (!called) return;
+    // أوامر بالكلام: يا عبد + اسم الأمر
+    if (w('تعال', 'ادخل', 'دخلني')) {
+        if (!access) return deny();
+        manualLeave = false; connectToVoice();
+        return message.reply('🫡 أبشر يا طويل العمر، دخلت الفويس بأمرك السامي! 🎙️');
+    }
+    if (w('اطلع', 'اخرج')) {
+        if (!access) return deny();
+        disconnectFromVoice();
+        return message.reply('👋 سمعاً وطاعة، طلعت من الفويس يا طويل العمر! 🚪');
+    }
+    if (w('تنبيه')) { if (!access) return deny(); return message.reply(rp('alerts')); }
+    if (w('نكته')) return message.reply(`🎭 ${rp('jokes')}`);
+    if (w('عمله')) return message.reply(Math.random() < 0.5 ? '🪙 طلعت: **صورة**' : '🪙 طلعت: **كتابة**');
+    if (w('نرد')) {
+        const sides = tokens.map(Number).find(n => Number.isInteger(n) && n >= 2 && n <= 1000) || 6;
+        return message.reply(`🎲 رميت نرد (${sides} وجه) وطلع: **${1 + Math.floor(Math.random() * sides)}**`);
+    }
+    if (w('حاله', 'status')) {
+        const inVoice = connection && connection.state.status === VoiceConnectionStatus.Ready;
+        return message.reply(`${rp('status.' + tier)}\n📡 الفويس: ${inVoice ? 'متصل ✅' : 'غير متصل ❌'}`);
+    }
+    if (w('فلوس', 'راتب')) {
+        return message.reply((tier === 'arthur' || tier === 'ida')
+            ? '💰 يا فخامة المقام، خزينة دايڤل كلها تحت أمرك، تبي نحول لك مليار دولار الحين؟ 🪙👑'
+            : '💸 راتبك في دايڤل هو كف محترم لو عدت تسأل أسئلة مالها داعي! 😂');
+    }
+    if (w('سيرفر')) return message.reply('🌟 سيرفر دايڤل أطخم وأفخم سيرفر بالديسكورد بفضل وجود مولاي ارثر والملكة إيدا على عرشه! 🔥👑');
+    if (w('مساعده', 'اوامر')) return message.reply(rp('help'));
+    for (const [word, name] of Object.entries(TEXT_GAMES)) {
+        if (w(word)) return games.handle(asInteraction(message, name), ctx);
+    }
+    if (w('نقاطي')) return points.handle(asInteraction(message, 'نقاطي'), ctx);
+    if (w('المتصدرين')) return points.handle(asInteraction(message, 'المتصدرين'), ctx);
 
-    if (onCooldown(message.author.id)) return;
+    // لو فيه لعبة شغالة بالروم، ردك عليها (الجواب) ما يعتبر كلام مع البوت
+    if (games.isActive(message.channel.id)) return;
 
     const has = (list) => tokens.some(t => list.includes(t));
 
     // ضرب
-    if (has(HIT_WORDS)) return message.reply(rp('hit.'+tier));
+    if (has(HIT_WORDS)) return message.reply(rp('hit.' + tier));
 
     // العشوائي
-    if (!hasAccess(tier)) {
+    if (!access) {
         return message.reply(has(RUDE_WORDS) ? rp('rude') : rp('greet.peasant'));
     }
 
-    if (has(FOOD_WORDS)) return message.reply(rp('food.'+tier));
-    if (has(THANKS_WORDS)) return message.reply(rp('thanks.'+tier));
-    if (has(WHERE_WORDS)) return message.reply(rp('where.'+tier));
-    if (has(MOVE_WORDS)) return message.reply(rp('move.'+tier));
-    if (has(HELP_WORDS)) return message.reply(rp('help'));
+    if (has(FOOD_WORDS)) return message.reply(rp('food.' + tier));
+    if (has(THANKS_WORDS)) return message.reply(rp('thanks.' + tier));
+    if (has(WHERE_WORDS)) return message.reply(rp('where.' + tier));
+    if (has(MOVE_WORDS)) return message.reply(rp('move.' + tier));
     if (has(POEM_WORDS)) return message.reply(rp('poems'));
-    if (tokens.includes('حالة') || content.includes('!status')) return message.reply(rp('status.'+tier));
 
-    return message.reply(rp('greet.'+tier));
+    return message.reply(rp('greet.' + tier));
 });
 
 // ====================================================================

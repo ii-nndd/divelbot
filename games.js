@@ -1,6 +1,7 @@
 // الألعاب: سرعة الكتابة، رياضيات، كلمة مبعثرة، أعلام. كل فوز يعطي نقاط.
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const points = require('./points');
+const R = require('./replies');
 
 const EPH = MessageFlags.Ephemeral;
 const active = new Set();      // رومات فيها لعبة شغالة
@@ -15,29 +16,17 @@ const norm = (s) => String(s)
 const loose = (s) => norm(s).replace(/^ال/, '').replace(/ /g, '');
 const digits = (s) => String(s).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).trim();
 
-const SENTENCES = [
-    'سيرفر دايڤل اقوى سيرفر بالعالم', 'الصبر مفتاح الفرج', 'من جد وجد ومن زرع حصد',
-    'العلم نور والجهل ظلام', 'الوقت كالسيف ان لم تقطعه قطعك', 'القهوة العربية تجمع الاحبة',
-    'الصديق وقت الضيق', 'كل تاخيرة فيها خيرة', 'ارثر وايدا ملوك دايڤل', 'اللي يزرع الخير يحصده',
-    'الدنيا دوارة يوم لك ويوم عليك', 'العجلة من الشيطان والتاني من الرحمن'
-];
-const WORDS = ['كمبيوتر', 'ديسكورد', 'سيرفر', 'مطبخ', 'سيارة', 'مدرسة', 'طيارة', 'شوكولاتة',
-    'برمجة', 'قهوة', 'صحراء', 'مكتبة', 'نخلة', 'بحيرة', 'حديقة', 'تلفزيون', 'مستشفى', 'جامعة'];
-const FLAGS = [
-    ['🇸🇦', ['السعودية']], ['🇰🇼', ['الكويت']], ['🇦🇪', ['الامارات']], ['🇶🇦', ['قطر']],
-    ['🇧🇭', ['البحرين']], ['🇴🇲', ['عمان', 'سلطنة عمان']], ['🇪🇬', ['مصر']], ['🇮🇶', ['العراق']],
-    ['🇯🇴', ['الاردن']], ['🇱🇧', ['لبنان']], ['🇸🇾', ['سوريا']], ['🇵🇸', ['فلسطين']],
-    ['🇾🇪', ['اليمن']], ['🇲🇦', ['المغرب']], ['🇩🇿', ['الجزائر']], ['🇹🇳', ['تونس']],
-    ['🇱🇾', ['ليبيا']], ['🇸🇩', ['السودان']], ['🇹🇷', ['تركيا']], ['🇯🇵', ['اليابان']],
-    ['🇧🇷', ['البرازيل']], ['🇫🇷', ['فرنسا']], ['🇩🇪', ['المانيا']], ['🇮🇹', ['ايطاليا']],
-    ['🇪🇸', ['اسبانيا']], ['🇬🇧', ['بريطانيا', 'انجلترا']], ['🇺🇸', ['امريكا', 'الولايات المتحدة']],
-    ['🇨🇦', ['كندا']], ['🇷🇺', ['روسيا']], ['🇨🇳', ['الصين']], ['🇰🇷', ['كوريا', 'كوريا الجنوبية']],
-    ['🇮🇳', ['الهند']], ['🇦🇷', ['الارجنتين']], ['🇲🇽', ['المكسيك']], ['🇵🇹', ['البرتغال']]
-];
+
+// القوائم تتقرأ من لوحة التحكم (أو الافتراضي لو ما تعدلت)
+const sentences = () => R.get('games.sentences');
+const words = () => R.get('games.words');
+const flags = () => R.get('games.flags')
+    .map(l => { const [e, n] = l.split('=>'); return [(e || '').trim(), (n || '').split('|').map(x => x.trim()).filter(Boolean)]; })
+    .filter(([e, n]) => e && n.length);
 
 const games = {
     سرعة() {
-        const s = pick(SENTENCES);
+        const s = pick(sentences());
         return {
             title: '⌨️ سرعة الكتابة', body: `اكتب الجملة بأسرع ما تقدر:\n\n## ${s}`, seconds: 30, answer: s,
             check: (t) => norm(t) === norm(s), pts: (sec) => Math.max(5, Math.round(20 - sec))
@@ -55,7 +44,7 @@ const games = {
         };
     },
     مبعثرة() {
-        const w = pick(WORDS);
+        const w = pick(words());
         let sc = w;
         while (sc === w) sc = [...w].sort(() => Math.random() - 0.5).join('');
         return {
@@ -64,7 +53,7 @@ const games = {
         };
     },
     اعلام() {
-        const [emoji, names] = pick(FLAGS);
+        const [emoji, names] = pick(flags());
         return {
             title: '🏳️ خمّن العلم', body: `وش اسم هالدولة؟\n\n# ${emoji}`, seconds: 20, answer: names[0],
             check: (t) => names.some(n => loose(n) === loose(t)), pts: () => 10
@@ -113,8 +102,11 @@ async function play(i, ctx, g) {
 
 async function handle(i, ctx) {
     if (!games[i.commandName]) return false;
-    await play(i, ctx, games[i.commandName]());
+    let g;
+    try { g = games[i.commandName](); }
+    catch { await i.reply({ content: '⚠️ قائمة هذي اللعبة فاضية أو فيها خطأ، راجعها من اللوحة.', flags: EPH }); return true; }
+    await play(i, ctx, g);
     return true;
 }
 
-module.exports = { commands, handle };
+module.exports = { commands, handle, isActive: (id) => active.has(id) };
