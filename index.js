@@ -8,6 +8,7 @@ const {
 const express = require('express');
 const R = require('./replies');
 const admin = require('./admin');
+const points = require('./points');
 const mountPanel = require('./panel');
 
 // ====================================================================
@@ -184,7 +185,7 @@ const commands = [
     new SlashCommandBuilder().setName('كرة').setDescription('كرة الحظ، اسأل سؤال')
         .addStringOption(o => o.setName('سؤال').setDescription('سؤالك').setRequired(true)),
     new SlashCommandBuilder().setName('مساعدة').setDescription('قائمة الأوامر')
-].map(c => c.toJSON()).concat(admin.commands);
+].map(c => c.toJSON()).concat(admin.commands, points.commands);
 
 // ====================================================================
 // 7. تشغيل البوت
@@ -198,6 +199,7 @@ client.once('clientReady', async () => {
     } catch (err) {
         console.error('❌ فشل تسجيل الأوامر:', err.message);
     }
+    points.init();
     connectToVoice();
 });
 
@@ -213,6 +215,7 @@ const rpsBeats = { rock: 'scissors', paper: 'rock', scissors: 'paper' };
 
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
+    if (await points.handle(interaction, { getTier, CONFIG, pick })) return;
     if (await admin.handle(interaction, { getTier, CONFIG, pick })) return;
 
     const tier = getTier(interaction.user.id, interaction.member);
@@ -354,6 +357,7 @@ function tokenize(text) {
 
 client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.guild) return;
+    points.onMessage(message, getTier(message.author.id, message.member)).catch(() => {});
 
     const content = message.content.trim();
     if (!content) return;
