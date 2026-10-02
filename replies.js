@@ -36,6 +36,14 @@ defaults['games.sentences'] = gd.SENTENCES;
 defaults['games.words'] = gd.WORDS;
 defaults['games.flags'] = gd.FLAGS.map(([e, n]) => `${e} => ${n.join(' | ')}`);
 
+// ردودك المحفوظة داخل الريبو (replies.seed.json): تصير الافتراضي الجديد وما تضيع مع Render
+try {
+    const seed = require('./replies.seed.json');
+    for (const [k, v] of Object.entries(seed)) {
+        if (k in defaults && Array.isArray(v) && (v.length || k.startsWith('custom.'))) defaults[k] = v;
+    }
+} catch {}
+
 let overrides = store.read('replies.json', {});
 
 const isCustom = (k) => k.startsWith('custom.');
