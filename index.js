@@ -8,6 +8,7 @@ const {
 const express = require('express');
 const R = require('./replies');
 const store = require('./store');
+const mountDashboard = require('./dashboard');
 const admin = require('./admin');
 const points = require('./points');
 const games = require('./games');
@@ -54,6 +55,9 @@ const client = new Client({
 // ====================================================================
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const rp = (key) => pick(R.get(key));
+
+// لوحة التحكم الكاملة (/dashboard)
+mountDashboard(app, express, client, CONFIG);
 
 function getTier(userId, member) {
     if (userId === CONFIG.ARTHUR_ID) return 'arthur';
