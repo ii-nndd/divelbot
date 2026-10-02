@@ -85,6 +85,7 @@ let connecting = false;
 async function connectToVoice() {
     if (connecting) return;
     connecting = true;
+    let conn = null;
     try {
         const channel = await client.channels.fetch(CONFIG.VOICE_CHANNEL_ID);
         if (!channel || !channel.isVoiceBased()) return;
@@ -93,7 +94,7 @@ async function connectToVoice() {
             try { connection.destroy(); } catch {}
         }
 
-        const conn = joinVoiceChannel({
+        conn = joinVoiceChannel({
             channelId: channel.id,
             guildId: channel.guild.id,
             adapterCreator: channel.guild.voiceAdapterCreator,
@@ -122,6 +123,10 @@ async function connectToVoice() {
         console.log('🎙️ دخل الفويس بنجاح');
     } catch (err) {
         console.error('❌ فشل الدخول للفويس:', err.message);
+        // تنظيف المحاولة الفاشلة عشان الحارس يقدر يعيد المحاولة
+        try { if (conn) conn.destroy(); } catch {}
+        if (connection === conn) connection = null;
+        if (!manualLeave) setTimeout(connectToVoice, 15_000);
     } finally {
         connecting = false;
     }
