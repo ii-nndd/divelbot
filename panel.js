@@ -27,8 +27,8 @@ button.sec,.btn{background:#2c2c3a}button:disabled{opacity:.5}
 <div class="row"><button class="sec" id="exp">⬇️ نسخة احتياطية</button><label class="btn">⬆️ استيراد<input type="file" id="imp" accept=".json" hidden></label></div>
 </div></div><div id="toast"></div>
 <script>
-var L={greet:'ترحيب',food:'أكل',hit:'ضرب',rude:'إهانة',thanks:'شكر',where:'وينك',move:'قوم/تحرك',status:'الحالة',help:'مساعدة',poems:'شعر',jokes:'نكت',alerts:'تنبيهات',welcome:'ترحيب الفويس',custom:'كلمات خاصة'};
-var T={arthur:'ارثر',ida:'إيدا',royal:'الرتبة الملكية',peasant:'العشوائيين',all:'الكل'};
+var L={greet:'ترحيب',food:'أكل',hit:'ضرب',rude:'إهانة',thanks:'شكر',where:'وينك',move:'قوم/تحرك',status:'الحالة',help:'مساعدة',poems:'شعر',jokes:'نكت',alerts:'تنبيهات',welcome:'ترحيب الفويس',custom:'كلمات خاصة',games:'الألعاب'};
+var T={arthur:'ارثر',ida:'إيدا',royal:'الرتبة الملكية',peasant:'العشوائيين',all:'الكل',sentences:'جمل سرعة الكتابة',words:'كلمات المبعثرة',flags:'الأعلام'};
 var $=function(i){return document.getElementById(i)},D={};
 function label(k){var p=k.split('.');return (L[p[0]]||p[0])+(p[1]?' ← '+(T[p[1]]||p[1]):'')}
 function toast(m,e){var t=$('toast');t.textContent=m;t.className=(e?'err ':'')+'on';setTimeout(function(){t.className=''},2200)}
@@ -37,7 +37,7 @@ function api(path,body){
   .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||'خطأ');return j})});
 }
 function show(){var k=$('key').value;$('txt').value=(D.all[k]||[]).join('\\n');
-  $('hint').textContent=k.indexOf('custom.')===0?'الصيغة: الكلمة => الرد   (مثال: صباح الخير => صباح النور)':''}
+  $('hint').textContent=k.indexOf('custom.')===0?'الصيغة: الكلمة => الرد   (مثال: صباح الخير => صباح النور)':k==='games.flags'?'الصيغة: العلم => اسم الدولة | اسم ثاني   (مثال: 🇸🇦 => السعودية)':k.indexOf('games.')===0?'كل سطر = عنصر واحد، بدون تشكيل':''}
 function load(){return api('replies').then(function(j){D=j;var s=$('key'),cur=s.value;s.innerHTML='';
   Object.keys(j.all).forEach(function(k){var o=document.createElement('option');o.value=k;o.textContent=label(k);s.appendChild(o)});
   if(cur)s.value=cur;$('login').hidden=true;$('app').hidden=false;show()})}
