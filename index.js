@@ -7,6 +7,7 @@ const {
 } = require('@discordjs/voice');
 const express = require('express');
 const R = require('./replies');
+const store = require('./store');
 const admin = require('./admin');
 const points = require('./points');
 const games = require('./games');
@@ -200,6 +201,8 @@ client.once('clientReady', async () => {
     } catch (err) {
         console.error('❌ فشل تسجيل الأوامر:', err.message);
     }
+    await store.init();
+    R.reload();
     points.init();
     connectToVoice();
 });

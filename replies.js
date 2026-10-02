@@ -30,6 +30,12 @@ Object.assign(defaults, {
     'custom.all': []
 });
 
+// قوائم الألعاب (تتعدل من اللوحة). الأعلام بصيغة:  🇸🇦 => السعودية | اسم ثاني
+const gd = require('./gamedata');
+defaults['games.sentences'] = gd.SENTENCES;
+defaults['games.words'] = gd.WORDS;
+defaults['games.flags'] = gd.FLAGS.map(([e, n]) => `${e} => ${n.join(' | ')}`);
+
 let overrides = store.read('replies.json', {});
 
 const isCustom = (k) => k.startsWith('custom.');
@@ -48,6 +54,7 @@ module.exports = {
         return out;
     },
     overrides: () => overrides,
+    reload() { overrides = store.read('replies.json', {}); },
     set(key, lines) {
         if (!(key in defaults)) return false;
         const clean = lines.map(s => String(s).trim().slice(0, 500)).filter(Boolean).slice(0, 200);
