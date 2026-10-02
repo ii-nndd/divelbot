@@ -9,6 +9,7 @@ const express = require('express');
 const R = require('./replies');
 const admin = require('./admin');
 const points = require('./points');
+const games = require('./games');
 const mountPanel = require('./panel');
 
 // ====================================================================
@@ -185,7 +186,7 @@ const commands = [
     new SlashCommandBuilder().setName('كرة').setDescription('كرة الحظ، اسأل سؤال')
         .addStringOption(o => o.setName('سؤال').setDescription('سؤالك').setRequired(true)),
     new SlashCommandBuilder().setName('مساعدة').setDescription('قائمة الأوامر')
-].map(c => c.toJSON()).concat(admin.commands, points.commands);
+].map(c => c.toJSON()).concat(admin.commands, points.commands, games.commands);
 
 // ====================================================================
 // 7. تشغيل البوت
@@ -215,6 +216,7 @@ const rpsBeats = { rock: 'scissors', paper: 'rock', scissors: 'paper' };
 
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
+    if (await games.handle(interaction, { getTier, CONFIG, pick })) return;
     if (await points.handle(interaction, { getTier, CONFIG, pick })) return;
     if (await admin.handle(interaction, { getTier, CONFIG, pick })) return;
 
@@ -324,7 +326,7 @@ client.on('interactionCreate', async (interaction) => {
                 return interaction.reply(
                     '**🛠️ أوامر البوت:**\n' +
                     '👑 **ملكية:** `/تعال` `/اطلع` `/تنبيه` `/شعر` `/اكل`\n' +
-                    '🎮 **ترفيه:** `/نكتة` `/نرد` `/عملة` `/اختار` `/حجر` `/تخمين` `/حب` `/كرة`\n' +
+                    '🎮 **ترفيه:** `/نكتة` `/نرد` `/عملة` `/اختار` `/حجر` `/تخمين` `/حب` `/كرة` `/سرعة` `/رياضيات` `/مبعثرة` `/اعلام` `/نقاطي` `/المتصدرين`\n' +
                     '📊 **عام:** `/حالة` `/بينج` `/فلوس` `/سيرفر`\n' +
                     '🛡️ **إدارة:** `/طرد` `/حظر` `/فك_حظر` `/ميوت` `/فك_ميوت` `/مسح` `/قفل` `/فتح` `/بطيء` `/رتبة_اضافة` `/رتبة_ازالة` `/لقب` `/صوت` `/نقل` `/اعلان` `/تحذير` `/تحذيرات` `/معلومات_عضو` `/معلومات_سيرفر`\n' +
                     '💬 وتقدر تناديني بـ **يا عبد** وأرد عليك!'
