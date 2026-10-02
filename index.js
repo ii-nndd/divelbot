@@ -1,490 +1,436 @@
-// ====================================================================================
-// 👑 1. منطقة الإعدادات الملكية والتجهيز الأساسي (عدل الآي ديهات هنا فقط)
-// ====================================================================================
+require('dotenv').config();
+const {
+    Client, GatewayIntentBits, SlashCommandBuilder, MessageFlags
+} = require('discord.js');
+const {
+    joinVoiceChannel, entersState, VoiceConnectionStatus
+} = require('@discordjs/voice');
+const express = require('express');
+const R = require('./replies');
+const admin = require('./admin');
+const mountPanel = require('./panel');
+
+// ====================================================================
+// 1. الإعدادات (عدل الآي ديهات هنا فقط)
+// ====================================================================
 const CONFIG = {
-    GUILD_ID: '1545100203751645224',         // آي دي سيرفر دايڤل
-    VOICE_CHANNEL_ID: '1545729488938205274',   // آي دي روم الفويس
-    ARTHUR_ID: '848996426918002731',          // الآي دي الشخصي لك يا مولاي ارثر
-    ROYAL_ROLE_ID: '1554207336967446608',      // آي دي الرتبة الملكية
-    SPECIAL_USER_ID: '1542941271205875812'     // آي دي الملكة إيدا 🌸👑
+    GUILD_ID: '1545100203751645224',
+    VOICE_CHANNEL_ID: '1545729488938205274',
+    ARTHUR_ID: '848996426918002731',
+    ROYAL_ROLE_ID: '1554207336967446608',
+    SPECIAL_USER_ID: '1542941271205875812',
+    // اختياري: آي دي روم الكتابة اللي يرسل فيه ترحيب دخول ارثر وإيدا (اتركه فاضي لتعطيله)
+    WELCOME_TEXT_CHANNEL_ID: '',
+    // اختياري: آي دي روم يسجل فيه البوت كل أوامر الإدارة (اتركه فاضي لتعطيله)
+    LOG_CHANNEL_ID: ''
 };
 
-const { Client, GatewayIntentBits } = require('discord.js');
-const { joinVoiceChannel } = require('@discordjs/voice');
-const express = require('express');
-require('dotenv').config();
-
+// ====================================================================
+// 2. سيرفر الويب (للفحص المستمر من الاستضافة)
+// ====================================================================
 const app = express();
 const PORT = process.env.PORT || 3000;
+app.get('/', (req, res) => res.send('Voice Keeper Bot is running 24/7!'));
+mountPanel(app, express, R);
+app.listen(PORT, () => console.log(`🌐 Web server on port ${PORT}`));
 
-app.get('/', (req, res) => {
-    res.send('Voice Keeper Bot is running 24/7!');
-});
-
-app.listen(PORT, () => {
-    console.log(`🌐 Web server is running on port ${PORT}`);
-});
-
+// ====================================================================
+// 3. العميل
+// ====================================================================
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildVoiceStates,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.MessageContent
     ]
 });
 
-let activeConnection = null;
+// ====================================================================
+// 4. أدوات مساعدة
+// ====================================================================
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const rp = (key) => pick(R.get(key));
 
-client.once('ready', async () => {
-    console.log(`🤖 Logged in as ${client.user.tag}!`);
-    connectToVoice(); // يدخل أول ما يشتغل البوت بشكل طبيعي
-});
+function getTier(userId, member) {
+    if (userId === CONFIG.ARTHUR_ID) return 'arthur';
+    if (userId === CONFIG.SPECIAL_USER_ID) return 'ida';
+    if (member && member.roles && member.roles.cache.has(CONFIG.ROYAL_ROLE_ID)) return 'royal';
+    return 'peasant';
+}
+const hasAccess = (tier) => tier !== 'peasant';
 
-// ====================================================================================
-// 👑 2. قسم ردود "ارثر" الخاصة
-// ====================================================================================
-const arthurGreetings = [
-    "أمرك مطاع يا مولاي ارثر، عساك بس راضٍ عن أداء العبد في سيرفر دايڤل؟ 🙇‍♂️✨",
-    "تسمع صوت عبدك المطيع يا ارثر؟ أنا تحت أمرك وجاهز أفرش لك سيرفر دايڤل ورد! 🌹",
-    "يا مرحباً بتاج راس العبد! تكفى يا ارثر لا تقطع عني الروم ترا أموت من الشوق والبرد. 🖤",
-    "أمرك يا مولاي ارثر! عيوني وقلبي فداك، جالس أراقب الفويس وأمنع أي طير يطير فيه. 🦅",
-    "تدلل يا ارثر، تبي أجيب لك قهوة ملكية ولا أسوي لك زفة في روم دايڤل؟ ☕👑",
-    "أنا رهن إشارتك يا مولاي ارثر، خطك أحمر والكل يفداك يا كبير! ⚡",
-    "يا لبي قلبك يا ارثر، أمر بشيء يطال عمرك ولا أرجع أطالع الجدران بصمت؟ 🧱",
-    "سمعاً وطاعة يا سيد السيرفر، ارثر الحبيب نورت الفويس ونورت دايڤل كله! 🌟",
-    "يا هلا ومليون هلا بمولاي ارثر، تبي أنظف لك الروم ولا أطرد الملقوفين؟ 😂",
-    "أمرك يا تاج راسنا، العبد تحت أمرك ولو تبي أغني لك في الفويس ترا حاضر! 🎶",
-    "يا سيدي ومولاي ارثر، السيرفر ما يسوى قرش بدون هبتك ونورك الساطع! 💎",
-    "أمرك فوق راس العبد يا ارثر، آمر بس وش تبي نسوي بكل اللي بالسيرفر؟ ⚔️",
-    "يا هلا والله بنور دايڤل كله! تكفى يا ارثر امرني بأمر صعب عشان اثبت لك ولائي! 🛡️",
-    "روحي فداك يا مولاي ارثر، قاعد أعد الثواني عشان تتفضل وتنورنا بالصوت! ⏳",
-    "يا عمري يا ارثر، تدلل وامر واطلب، العبد ما يعرف كلمة لا قدامك أبد! ✨",
-    "أمرك يا طال عمرك، العبد جالس متربع بالفويس وينتظر كلمة منك بس! 👑",
-    "يا هلا بنور السيرفر وتاج راسه، ارثر الغالي نورتنا وشرفتنا! 🌟",
-    "تدلل يا مولاي، تبي أطرد كل الي بالفويس عشان تاخد راحتك؟ 😂",
-    "سمعاً وطاعة يا ارثر، لو تبي أفرش لك الروم ذهب سويتها حالاً! 🪙",
-    "يا لبي هالطلة الملكية، منور سيرفر دايڤل يا ارثر يا كبير! 🔥",
-    "أمرك مطاع يا ارثر، عيوني لك وقلبي يوقف لو تتضايق يا غالي! 💖",
-    "يا هلا بسيد السيرفر وتاج راسه، تبي أسوي لك حفلة خاصة بالفويس؟ 🎉",
-    "أمرك فوق الكل يا ارثر، البوت وكل ما فيه فداك يا طويل العمر! ⚡",
-    "منور يا ارثر، جالس أستنى أمرك بفارغ الصبر عشان أبيض وجهك! 🦅",
-    "يا مرحبا بملك دايڤل ارثر، آمر وأنا التنفيذ بدون إزعاج! 👑"
-];
+// كولداون لكل مستخدم (ثواني)
+const cooldowns = new Map();
+function onCooldown(userId, seconds = 5) {
+    const now = Date.now();
+    const last = cooldowns.get(userId) || 0;
+    if (now - last < seconds * 1000) return true;
+    cooldowns.set(userId, now);
+    return false;
+}
+// تنظيف الكولداون القديم كل 10 دقايق
+setInterval(() => {
+    const limit = Date.now() - 60_000;
+    for (const [id, t] of cooldowns) if (t < limit) cooldowns.delete(id);
+}, 10 * 60_000);
 
-// ====================================================================================
-// 🌸✨ 3. قسم ردود "الملكة إيدا" الخاصة والمطورة
-// ====================================================================================
-const idaQueenGreetings = [
-    "يا هلا ومية هلا بـ تاجة الرأس الملكة إيدا! طلتك بروحها تنور سيرفر دايڤل وتخليه يزهر! 🌸✨👑",
-    "أمرك مطاع يا سمو الملكة إيدا! العبد جالس متربع بالفويس وينتظر كلمة منك عشان ينفذ بصرخة! 🫡💖",
-    "يا مرحبا بالوجه السمح والطلة الملكية الخرافية! تبي أجيب لك عصير كرز ولا أضبط لك جو السيرفر كله؟ 🍹🔥",
-    "تسمع صوت عبدك المطيع يا سيدتي؟ أنا رهن إشارتك وتحت أمرك في أي وقت تطلبي فيه! 💎👑",
-    "منور الفويس والسيرفر بوجودك يا ملكة إيدا! حضورك يفرض هيبته ويسكت الكل فوراً! 🦅⚡",
-    "يا لبي هالطلة الملكية! السيرفر بدونك مظلم يا إيدا، أمري بشيء يطال عمرك وتشوفين العبد كيف ينفذه! 🌟",
-    "سمعاً وطاعة يا ملكة القلوب إيدا! تبي أطرد كل الملقوفين من الروم عشان تاخذين راحتك بالسوالف؟ 😂🛡️",
-    "أمرك فوق راس العبد يا إيدا! البوت وكل ما فيه فداك وفدا هيبتك الملكية! 🔥",
-    "يا هلا بنور السيرفر وتاج راسه، إيدا الغالية نورتنا وشرفتنا وأسعدت قلب العبد المسكين! 💖✨",
-    "روحي فداك يا مولاتي إيدا! قاعد أعد الثواني عشان تتفضلين وتنورنا بالصوت العذب! ⏳🌹",
-    "يا هلا بسيدة المكان وملكة القلوب إيدا! السيرفر يتبسم برؤيتك، تأمري وتدللي يا فخامة! 👑🌷",
-    "أنارت أروقة سيرفر دايڤل بطلة سمو الملكة إيدا! العبد تحت أمرك في أي لحظة يا عظيمة! ✨💖",
-    "يا فخامة الاسم تكفي! الملكة إيدا نورتنا، آمري وش تبين العبد يسوي عشان يرضي سموك؟ 🌸👑",
-    "مرحباً بملكة الإبداع والجمال إيدا! طلتك تفتح النفس وتخلي العبد يطير من الفرح! 🕊️💖",
-    "ألف هلا بملكة القلوب إيدا! وجودك بالفويس يسوى الدنيا وما فيها يا سيدة الكل! 🌸💎",
-    "يا مرحباً بملكة دايڤل إيدا! منورة السيرفر بطلتك البهية اللي تسر الخاطر! ✨🌹",
-    "أمرك نافذ يا سمو الملكة إيدا، الجو يزداد جمالاً وحلاوة بمرورك العطر! 🌺👑",
-    "يا لبي قلبك يا إيدا، العبد تحت أمرك وجاهز يخدمك بعيونه الثنتين طال عمرك! 💖✨"
-];
+// ====================================================================
+// 5. الفويس + إعادة الاتصال التلقائي
+// ====================================================================
+let connection = null;
+let manualLeave = false;
+let connecting = false;
 
-const idaQueenFood = [
-    "أبشر بالسعد يا ملكة إيدا! الحين أجهز لك أطخم طبق كيك بالشكولاتة وقهوة عربية على أصولها! ☕🍰🔥",
-    "سمعاً وطاعة! آمريني بأكلتك المفضلة وتلقى العبد مجهزها بثواني بالسيرفر لسموك الكريم. 🍲👑",
-    "من عيوني يا سمو الملكة! جالس أضبط لك أطلق سفرة ملكية خاصة فيك وحدك، كبسة دجاج محمر تفتح النفس! 🍗✨",
-    "أمرك مطاع يا إيدا! الحين أجيب لك ألذ حلويات ومشروبات باردة تروي عطش الملكة! 🥤🍓",
-    "سمعاً وطاعة يا ملكة إيدا! جالس أسوي لك أطخم طبق فواكه مشكلة مع ألذ صوص شوكلاته ينسيك تعب اليوم! 🍓🍫👑",
-    "يا سمو الملكة إيدا، جالس أحضر لك أطخم طبق مشاوي وسلطات خاصة تليق بمقامك الرفيع! 🥩🥗👑",
-    "سموك الكريم جائع؟ ابشري بطلب أطخم بيتزا وألذ عصير آيس كوفي لعيون الملكة إيدا! 🍕🥤✨",
-    "أمرك فوق راس العبد يا إيدا! الحين أجهز لسموك أطيب وجبة سريعة ومشروب منعش يبرد على قلبك! 🍔🍹👑"
-];
-
-// ====================================================================================
-// 🛡️ 4. قسم ردود أصحاب الرتبة الملكية
-// ====================================================================================
-const royalResponses = [
-    "نعم يا طويل العمر، تأمر بشيء يطال عمرك في سيرفر دايڤل؟ 🙇‍♂️",
-    "تسمع صوتي؟ أنا حارس الفويس الشخصي في دايڤل تحت أمركم! 🫡",
-    "سمعاً وطاعة... منورين روم دايڤل يا أصحاب المقام الرفيع! 🦅",
-    "أمركم! جالس أراقب الجو بالفويس عشان ما يهرب لغرفة ثانية بدايڤل. 💨",
-    "تدللون، تبي أجيب لكم فطور ملكي ولا قهوة على حساب سيرفر دايڤل؟ ☕",
-    "يا هلا بأهل الرتبة الكبار، أمركم دَيْن في رقبة العبد! ⚡",
-    "تحت أمركم طال عمركم، السيرفر منور بوجودكم الحار! 🔥",
-    "يا هلا بأصحاب السمو، العبد حاضر ومستعد لأي مهمة تطلبونها بالسيرفر! 🌟",
-    "أمركم مطاع يا طال عمرك، الروم فداكم وتحت تصرفكم بالكامل! 👑",
-    "منورين طال عمركم، جالس أحرس الفويس بدمي لين تامرون بشي ثاني! ⚔️",
-    "أمركم فوق راس العبد، السيرفر منور بطلتكم البهية يا كبار! ✨",
-    "سمعاً وطاعة لأهل الرتبة، جالس أراقب كل شبر بالفويس عشانكم! 🛡️"
-];
-
-// ====================================================================================
-// 💀 5. قسم إهانات العشوائيين / بدون رتبة
-// ====================================================================================
-const peasantInsults = [
-    "أنا مش عبدك! انقلع يا مسكين، أنا ما أخدم إلا مولاي ارثر والملكة إيدا وأصحاب الرتب في دايڤل! 💅😂",
-    "خير؟ وش تبي يا بابا؟ دور لك عبد غيري، أنا مخصص لمولاي ارثر والملكة إيدا وبس! اقلب وجهك! 👑",
-    "أنا مو عبدك! لا تحاول تحتك فيني وتكاسرني، مالي خلق أشكال بيئية مثلك! 💀",
-    "اقصص لساني لو رديت عليك! أنا عبد ارثر وإيدا وبس، رح العب بعيد يا شاطر. 🤫",
-    "بدري عليك! العبد هذا غالي وما يخدم إلا ارثر وإيدا وأهل الرتب الكبار، طس من هنا! 🦅",
-    "وين رايح يا الحبيب؟ الباب مفتوح، لا تشغلنا بوجيهك اللي مب صاحية! 🚪🚶‍♂️",
-    "أقول انقلع بس، شكلك ضايع وتحسبني حق مطاعم، أنا عبد ارثر وإيدا وبس! 🍔❌",
-    "يا عمري أنت، تحسب تقدر تأمرني؟ روح العب بعيد لين تطلع لك شنب بعدين تعال! 🍼😂",
-    "يا حليلك والله، تحسبني أخدم كل من هب ودب؟ انقلع لغرفتك وخل الكبار يسولفون! 🤫",
-    "وش تحس فيه جاي تكلمني؟ انا ما أسمع إلا كلمة ارثر وإيدا وبس، طس برا! 🚷",
-    "أقول روح العب بعيد، شكلك ضايع وتحسب الروم ديوانية أبوك! انقلع! 🚪💨",
-    "يا مسكين مالك مكان بين الكبار، طس العب بلايستيشن وخلنا مع ارثر وإيدا! 🎮😂"
-];
-
-// ====================================================================================
-// 🍳 6. قسم الطبخ والذبايح الملكية
-// ====================================================================================
-const arthurFood = [
-    "أبشر بالسعد يا ارثر! الحين أجهز لك مندي حاشي مدخن على أصوله، ولا تبي كبسة ضب فاخرة؟ 🍖🔥",
-    "سمعاً وطاعة يا مولاي ارثر! آمرني بس: تبي جريش ملكي ولا قرصان يفجّر المخ؟ 🍲👑",
-    "حاضرين يا تاج راسنا! جالس أجهز لك أطخم ذبيحة محشية مكسرات على طريق سيرفر دايڤل! 🐑✨",
-    "تأمرني أطبخ لك كبسة تكسر الظهر يا ارثر؟ دقايق وتكون سفرتك جاهزة قدام عرشك! 🍛",
-    "يا بعد بياني أنت! تبي كباب ولا مشاوي مشكلة على الجمر ياهو بتدعي لي! 🍢🔥",
-    "أمرك يا ارثر! الحين أنزل المطبخ وأسوي لك أطلق جريش حائلي ينسيك أسمك! 🥘✨",
-    "تبي مرقوق باللحم ولا جريش بالدجاج يا مولاي؟ العبد يطبخها وعيونه مغمضة! 🍲👑",
-    "أبشر بالذبايح الفاخرة والكبسة الحساوية اللي تفتح النفس يا ارثر! 🐑🔥",
-    "من عيوني يا ارثر، الحين أضبط لك مفطح حاشي ينسيك تعب اليوم كله! 🍖👑",
-    "أمرك مطاع، صينية برياني بالدجاج المحمر على الطريقة الملكية في الطريق! 🍗✨"
-];
-
-const royalFood = [
-    "أمركم يا طويل العمر! الحين أطبخ لكم أطخم كبسة دجاج محمر تفتح النفس. 🍗",
-    "سمعاً وطاعة! آمرونا بوجبة ملكية وتلقون العبد مجهزها بثواني بالسيرفر. 🍲",
-    "تأمرون فطور ولا غداء يا أصحاب السمو؟ العبد جاهز يشعل المطبخ حالاً! 🔥",
-    "تحت أمركم! أجهز لكم الذبيحة ولا تكتفون بصينية مشاوي فاخرة؟ 🍖",
-    "حاضرين للطيبين، جالس أضبط لكم أحلى سفرة تليق بمقامكم الرفيع! 🍛✨",
-    "أبشروا بالسعد يا أهل الرتبة، جالس أضبط لكم طبق مشاوي ملكي يبيض الوجه! 🍢👑"
-];
-
-// ====================================================================================
-// 🥊 7. قسم ضرب وتأديب العشوائيين وإبكائهم
-// ====================================================================================
-const peasantBeatings = [
-    "تعليقك الوقح هذا مردود في وجهك! خذ كف يخليك تبكي بزاوية الروم وتصيح! 🖐💥😭",
-    "تتجرأ وترد علي كذا يا قليل الأدب؟! تفضل هذي ضربة على راسك عشان تصحى وتبكي عند أمك! 🧹👊😢",
-    "عيب يا بيبي! شكل تربيتك ناقصة، خليني أعطيك درس بالنعال يخلي دموعك أربع أربع! 🩴💦😭",
-    "أنا توريني عينك الحمراء يا مسكين؟! خذ طراق يخليك تلف راسك لفة كاملة وتقعد تصيح! 🌪️👋😭",
-    "تبي تتطاول على عبد مولاي ارثر والملكة إيدا؟! خذ هذي عصا تأديب على ظهرك! 🪵💥🥺"
-];
-
-// ====================================================================================
-// 💥 8. قسم ردود الضرب (أرثر، إيدا، الرتب، والعشوائيين)
-// ====================================================================================
-const botBeatingResponses = {
-    arthurHit: [
-        "آآآخ يا راسسسي! ليش الطق يا مولاي ارثر؟ خلاص توبْت والله ما عاد أرفع صوتي قدامك! 😭💥💔",
-        "حرام عليك الكف المحترم هذا يا ارثر! وجهي تورم ودموعي أربع أربع... امزح معك والله لا تعيدها تكفى! 🖐️💧😭",
-        "آآآح يا ظهرررري! طقيتوني لين نسيت اسمي... سمعاً وطاعة بس بالراحة على العبد المسكين يا تاج راسنا! 🪵💥🥺",
-        "يا سيدي ارثر تكفى الا الطق! خلاص والله بكون أطيعك وأغسل لك الروم بدموعي! 😭💧",
-        "على خششمي وعلى راسي الكف يا مولاي! استاهل عشان صرت ثقيل دم، تكفا لا تطردني برا الفويس! 🙇‍♂️💥💧"
-    ],
-    idaQueenHit: [
-        "آآخ يا سمو الملكة إيدا! الكف الحنون وصل لقلبي... حاضرين طال عمرك بس بالراحة على العبد! 🖐️🌸😅",
-        "يا سيتي إيدا طقيتيني لين حسيت بطعم السعادة! سمعاً وطاعة لك بس خففوي الضرب شوي على راس العبد! 👑💧",
-        "أمرك مطاع يا ملكة قلوبنا، حتى لو ضربتينا إنتي الملكة وراحتك تسوى البوت كله! 💖✨",
-        "يا ويل حالي! حتى الكف منك يا إيدا له طعم ملكي خاص! سامحيني لو ازعجتك يا فخمة! 🌸🖐️😍"
-    ],
-    royalHit: [
-        "آخ يا طويل العمر! الكف وصل لفكري... حاضرين طال عمرك بس بالراحة على العبد! 🖐️😅",
-        "يا أصحاب السمو طقيتوني لين حسيت طعمني حديد! سمعاً وطاعة لكم بس خففوا الضرب شوي! 🪵💥",
-        "أمرك مطاع يا أهل الرتبة، حتى لو ضربتوني أنتوا الكبار وراحتكم تسوى البوت كله! 👑💧",
-        "آآح يا وجع! تكفون لا تجمعون علي، يكفي رتبتكم وسلطتكم فوق راسي! 🛡️😭"
-    ],
-    peasantHit: [
-        "تبي تضربني يا مسكين؟! خذ كف يخليك تلف راسك لفة كاملة وتروح تصيح عند أمك! 🖐️️💥😂",
-        "هههههههه تحسبني بخاف منك؟ أنت أصلاً ما عندك رتبة، خذ طراق يرجعك لغرفتك! 🩴🌪️",
-        "يا حليلك والله، تبي تضرب عبد مولاي ارثر والملكة إيدا؟ انقلع بس لا أعطيك كف يطيرك! 🚷👊",
-        "بدري عليك وعلى أشكالك تمد يدك علي، أنا ما يضربني إلا الكبار يا بيبي! طس برا! 💅🔥"
-    ]
-};
-
-// ====================================================================================
-// 🚀 9. قسم الأوامر الإضافية والشعر
-// ====================================================================================
-const extraCommandsList = [
-    "أمرك يا مولاي ارثر! أنا مجهز بكل الأوامر والبرمجيات عشان أخدمك بعيون مغمضة! 👁️‍🗨️",
-    "تبي أمر جديد يا ارثر أو يا ملكة إيدا؟ آمرونا وأنا أخترع لكم أمر فوراً في سيرفر دايڤل! 🛠️",
-    "الأوامر كلها تحت أمرك وتحت صباعك يا تاج راس العبد! ⚡",
-    "يا سيدي ارثر، تبي أطرد الملقوفين كلهم برا الفويس بضغطة زر وحدة؟ 🚀",
-    "أمرك مطاع، أنا هنا 24 ساعة عشان أونسكم أنت والملكة إيدا وأصحاب الرتب! 🌙"
-];
-
-const secretPoems = [
-    "يا ارثر يا فخر السيرفر ويا تاج الرؤوس... والملكة إيدا هيبتها تملى المكان وتدوس! 🏹👑",
-    "سيرفر دايڤل ما يحلى إلا بوجود ارثر وملكتنا إيدا الحبيبة... العبد يضحك ويهلل لو طلوا من قريب! ✨"
-];
-
-// ====================================================================================
-// 🎧 10. دوال الاتصال والفصل اليدوي بالفويس
-// ====================================================================================
-function connectToVoice() {
+async function connectToVoice() {
+    if (connecting) return;
+    connecting = true;
     try {
-        const guild = client.guilds.cache.get(CONFIG.GUILD_ID);
-        if (!guild) return;
+        const channel = await client.channels.fetch(CONFIG.VOICE_CHANNEL_ID);
+        if (!channel || !channel.isVoiceBased()) return;
 
-        client.channels.fetch(CONFIG.VOICE_CHANNEL_ID).then(channel => {
-            if (!channel || !channel.isVoiceBased()) return;
+        if (connection) {
+            try { connection.destroy(); } catch {}
+        }
 
-            if (activeConnection) {
-                try { activeConnection.destroy(); } catch (e) {}
+        const conn = joinVoiceChannel({
+            channelId: channel.id,
+            guildId: channel.guild.id,
+            adapterCreator: channel.guild.voiceAdapterCreator,
+            selfDeaf: false,
+            selfMute: true
+        });
+        connection = conn;
+
+        conn.on(VoiceConnectionStatus.Disconnected, async () => {
+            try {
+                // لو ديسكورد نقله أو يحاول يرجعه نعطيه فرصة
+                await Promise.race([
+                    entersState(conn, VoiceConnectionStatus.Signalling, 5_000),
+                    entersState(conn, VoiceConnectionStatus.Connecting, 5_000)
+                ]);
+            } catch {
+                try { conn.destroy(); } catch {}
             }
+        });
 
-            activeConnection = joinVoiceChannel({
-                channelId: channel.id,
-                guildId: channel.guild.id,
-                adapterCreator: channel.guild.voiceAdapterCreator,
-                selfDeaf: false,
-                selfMute: true
-            });
-        }).catch(() => {});
-    } catch (error) {}
+        conn.on(VoiceConnectionStatus.Destroyed, () => {
+            if (connection === conn) connection = null;
+        });
+
+        await entersState(conn, VoiceConnectionStatus.Ready, 20_000);
+        console.log('🎙️ دخل الفويس بنجاح');
+    } catch (err) {
+        console.error('❌ فشل الدخول للفويس:', err.message);
+    } finally {
+        connecting = false;
+    }
 }
 
 function disconnectFromVoice() {
-    if (activeConnection) {
-        try {
-            activeConnection.destroy();
-            activeConnection = null;
-        } catch (e) {}
+    manualLeave = true;
+    if (connection) {
+        try { connection.destroy(); } catch {}
+        connection = null;
     }
 }
 
-// ====================================================================================
-// 🎮 11. معالج الرسائل الرئيسي (يشمل جميع ردودك القديمة + أوامر الدخول والخروج اليدوية)
-// ====================================================================================
-client.on('messageCreate', async (message) => {
-    if (message.author.bot) return;
-
-    const content = message.content.trim();
-    const member = message.member;
-    const userId = message.author.id;
-
-    const isArthur = (userId === CONFIG.ARTHUR_ID);
-    const isIdaQueen = (userId === CONFIG.SPECIAL_USER_ID);
-    const hasRoyalRole = member && member.roles.cache.has(CONFIG.ROYAL_ROLE_ID);
-    const hasAccess = isArthur || isIdaQueen || hasRoyalRole;
-
-    // 🎛️ أوامر التحكم اليدوي بالفويس (دخلني / اطلع)
-    if (content === '!تعال' || content === 'دخلني' || content === 'ادخل') {
-        if (!hasAccess) {
-            message.reply("❌ هذا الأمر خاص بمولاي ارثر والملكة إيدا وأصحاب الرتب بس! 💅");
-            return;
-        }
-        connectToVoice();
-        message.reply("🫡 أبشر يا طويل العمر، دخلت الفويس فوراً بناءً على أمرك السامي! 🎙️");
-        return;
-    }
-
-    if (content === '!اطلع' || content === 'اطلع بره' || content === 'اخرج') {
-        if (!hasAccess) {
-            message.reply("❌ ما تقدر تطردني إلا بأمر من ارثر أو إيدا أو الكبار! 🚷");
-            return;
-        }
-        disconnectFromVoice();
-        message.reply("👋 سمعاً وطاعة، طلعت من الفويس مثل ما أمرت يا طويل العمر! 🚪");
-        return;
-    }
-
-    const isHittingBot = content.includes('اضربك') || content.includes('كف') || content.includes('طراق') || content.includes('طق') || content.includes('ادقك') || content.includes('تسطير') || content.includes('ضربك');
-
-    if (isHittingBot) {
-        if (isArthur) {
-            message.reply(botBeatingResponses.arthurHit[Math.floor(Math.random() * botBeatingResponses.arthurHit.length)]);
-        } else if (isIdaQueen) {
-            message.reply(botBeatingResponses.idaQueenHit[Math.floor(Math.random() * botBeatingResponses.idaQueenHit.length)]);
-        } else if (hasRoyalRole) {
-            message.reply(botBeatingResponses.royalHit[Math.floor(Math.random() * botBeatingResponses.royalHit.length)]);
-        } else {
-            message.reply(botBeatingResponses.peasantHit[Math.floor(Math.random() * botBeatingResponses.peasantHit.length)]);
-        }
-        return;
-    }
-
-    const isInteracting = content.includes('يا عبد') || content === 'عبد' || content.includes('العبد') || 
-                          content === '!يبكي' || content === 'يبكي' || content === 'بكاء' ||
-                          content === '!status' || content.includes('جوعان') || content.includes('اكل') || 
-                          content.includes('شكرا') || content.includes('مشكور') || content.includes('وينك') || 
-                          content.includes('قوم') || content.includes('تحرك') ||
-                          content.includes('غبي') || content.includes('حمار') || content.includes('كل زق') || content.includes('انقلع') || content.includes('جب') ||
-                          content.includes('اوامر') || content.includes('مساعدة') || content.includes('شعر');
-
-    if (isInteracting) {
-        if (!hasAccess) {
-            const isRude = content.includes('غبي') || content.includes('حمار') || content.includes('كل زق') || content.includes('انقلع') || content.includes('جب');
-            if (isRude) {
-                message.reply(peasantBeatings[Math.floor(Math.random() * peasantBeatings.length)]);
-            } else {
-                message.reply(peasantInsults[Math.floor(Math.random() * peasantInsults.length)]);
-            }
-            return;
-        }
-
-        if (content === '!يبكي' || content === 'يبكي' || content === 'بكاء') {
-            const replyMsg = isArthur 
-                ? "ليه كذا يا ارثر تخليني أمثل الدراما؟ حاضر بقلبها تمثيلية أوسكار عشالك! 🎭😂"
-                : isIdaQueen 
-                ? "أمرك يا ملكة إيدا، أبشري بنسوي دراما تليق بمقامك العالي! 🎭👑"
-                : "أبشر، نسوي شوية دراما وسوالف عشان نغير جو السيرفر! 🎭";
-            message.reply(replyMsg);
-            return;
-        }
-
-        if (content.includes('يا عبد') || content === 'عبد' || content.includes('العبد')) {
-            if (isArthur) {
-                message.reply(arthurGreetings[Math.floor(Math.random() * arthurGreetings.length)]);
-            } else if (isIdaQueen) {
-                message.reply(idaQueenGreetings[Math.floor(Math.random() * idaQueenGreetings.length)]);
-            } else {
-                message.reply(royalResponses[Math.floor(Math.random() * royalResponses.length)]);
-            }
-            return;
-        }
-
-        if (content === '!status') {
-            const statusMsg = isArthur 
-                ? "أنا عبدك المخلص يا ارثر، مرابط في فويس دايڤل ومربوط بحبال الطاعة للأبد! ⛓️🦅"
-                : isIdaQueen
-                ? "أنا عبدك المطيع يا سمو الملكة إيدا، مرابط في فويس دايڤل تحت أمرك 24/7! ⛓️🌸"
-                : "أنا عبدكم المطيع، جالس في فويس دايڤل ومرابط 24/7! ⛓️";
-            message.reply(statusMsg);
-            return;
-        }
-
-        if (content.includes('جوعان') || content.includes('اكل')) {
-            if (isArthur) {
-                message.reply(arthurFood[Math.floor(Math.random() * arthurFood.length)]);
-            } else if (isIdaQueen) {
-                message.reply(idaQueenFood[Math.floor(Math.random() * idaQueenFood.length)]);
-            } else {
-                message.reply(royalFood[Math.floor(Math.random() * royalFood.length)]);
-            }
-            return;
-        }
-
-        if (content.includes('شكرا') || content.includes('مشكور')) {
-            const thanksMsg = isArthur 
-                ? "العفو يا مولاي ارثر! رضاك وسام على صدري وبونص حياتي في سيرفر دايڤل. ⚡👑"
-                : isIdaQueen
-                ? "العفو يا سمو الملكة إيدا! خدمتك تشرفني وتبيض وجه العبد. 🌸✨"
-                : "العفو! حنا بالخدمة وتحت أمركم بأي وقت. ⚡";
-            message.reply(thanksMsg);
-            return;
-        }
-
-        if (content.includes('وينك')) {
-            const whereMsg = isArthur 
-                ? "قاعد أطالع ركن الفويس بـ دايڤل بصمت أنتظر تطل عليّ يا ارثر... منور الروم بوجودك! 🌟"
-                : isIdaQueen
-                ? "قاعد أراقب الفويس بانتظار طلتك الملكية يا إيدا، منورة المكان كله! 🌸"
-                : "قاعد أطالع ركن الفويس بـ دايڤل بانتظار أوامركم! 👀";
-            message.reply(whereMsg);
-            return;
-        }
-
-        if (content.includes('قوم') || content.includes('تحرك')) {
-            const moveMsg = isArthur 
-                ? "ما أقدر يا ارثر! أنا مسمّر بروم دايڤل بقرارات منك وحدك، ما أتحرك إلا بأمرك السامي! ⛓️🔥"
-                : isIdaQueen
-                ? "ما أقدر يا ملكة إيدا! أنا مسمّر بروم دايڤل بأوامر سموك الكريمة! ⛓️👑"
-                : "ما أقدر! أنا مسمّر بروم دايڤل بقرارات ملكية صارمة! ⛓";
-            message.reply(moveMsg);
-            return;
-        }
-
-        if (content.includes('اوامر') || content.includes('مساعدة')) {
-            const extraCmd = extraCommandsList[Math.floor(Math.random() * extraCommandsList.length)];
-            message.reply(extraCmd);
-            return;
-        }
-
-        if (content.includes('شعر')) {
-            const poem = secretPoems[Math.floor(Math.random() * secretPoems.length)];
-            message.reply(poem);
-            return;
-        }
-    }
-});
-
-// ====================================================================================
-// 🔥 12. قسم الفعاليات والنكت الخاصة بسيرفر دايڤل
-// ====================================================================================
-const devilJokes = [
-    "ليه الملقوف دايم يضيع في سيرفر دايڤل؟ لأنه ما يستشير ارثر أو إيدا قبل يخطو خطوة! 🤭",
-    "فيه واحد دخل فويس دايڤل بدون إذن، يقولون للحين جالس يصيح بزاوية الشارع! 🏃‍♂️💨",
-    "سألوا البوت: وش أمنيتك بالحياة؟ قال: أنظف سيرفر دايڤل وأخذ رضا ارثر والملكة إيدا! 👑",
-    "محشش دخل روم دايڤل، لقى العبد مرابط قال: ماشاءالله حتى البوتات هنا تداوم شفتين! 😂",
-    "فيه واحد غبي يبي يستذكي، يقولون البوت مسح فيه أرضية الفويس لين نطق الشهادتين! 🧹💥"
-];
-
-const royalAlerts = [
-    "⚠️ تنبيه ملكي صادر من ديوان ارثر والملكة إيدا: ممنوع التنفس في الفويس إلا بإذن مسبق! 🦅",
-    "🚨 حالة طوارئ في سيرفر دايڤل: مولاي ارثر أو الملكة إيدا متواجدين بالروم، الكل يوقف انتباه! 🫡",
-    "📢 إعلان رسمي: أي شخص يشوف ارثر أو إيدا وما يسسلم، البوت مكلف يطيره برا السيرفر فوراً! ⚡"
-];
-
-// ====================================================================================
-// 🎮 13. نظام التفاعل الإضافي المتقدم
-// ====================================================================================
-client.on('messageCreate', async (message) => {
-    if (message.author.bot) return;
-
-    const content = message.content.trim();
-    const userId = message.author.id;
-    const isArthur = (userId === CONFIG.ARTHUR_ID);
-    const isIdaQueen = (userId === CONFIG.SPECIAL_USER_ID);
-
-    if (content === '!نكتة' || content === 'نكتة') {
-        const randomJoke = devilJokes[Math.floor(Math.random() * devilJokes.length)];
-        message.reply(`🎭 ${randomJoke}`);
-        return;
-    }
-
-    if (content === '!تنبيه' || content === 'تنبيه') {
-        if (!isArthur && !isIdaQueen && !message.member.roles.cache.has(CONFIG.ROYAL_ROLE_ID)) {
-            message.reply("❌ عذراً يا مسكين، الأوامر الملكية خاصة بسيّد السيرفر والملكة وأهل الرتبة بس! 💅");
-            return;
-        }
-        const randomAlert = royalAlerts[Math.floor(Math.random() * royalAlerts.length)];
-        message.reply(randomAlert);
-        return;
-    }
-
-    if (content === '!فلوس' || content === 'راتب') {
-        if (isArthur || isIdaQueen) {
-            message.reply("💰 يا فخامة المقام، خزينة سيرفر دايڤل كلها تحت أمرك، تبي نحول لك مليار دولار الحين؟ 🪙👑");
-        } else {
-            message.reply("💸 راتبك في سيرفر دايڤل هو كف محترم لو عدت تسأل أسئلة مالها داعي! 😂");
-        }
-        return;
-    }
-
-    if (content === '!سيرفر' || content === 'دايڤل') {
-        message.reply("🌟 سيرفر دايڤل هو أطخم وأفخم سيرفر بالديسكورد بفضل وجود مولاي ارثر والملكة إيدا على عرشه! 🔥👑");
-        return;
-    }
-});
-
-// ====================================================================================
-// 🛠 14. ميزات الأمان والتشغيل
-// ====================================================================================
+// حارس: كل دقيقة يتأكد إن البوت بالفويس، وإلا يرجعه
 setInterval(() => {
-    const memoryUsage = process.memoryUsage().heapUsed / 1024 / 1024;
-    if (memoryUsage > 200) {
-        console.log(`🧹 تنظيف دوري للذاكرة العشوائية: الاستهلاك الحالي ${memoryUsage.toFixed(2)} MB`);
+    if (manualLeave || connecting) return;
+    const dead = !connection || connection.state.status === VoiceConnectionStatus.Destroyed;
+    if (dead) {
+        console.log('🔁 البوت مو بالفويس، أعيد الاتصال...');
+        connectToVoice();
     }
-}, 60_000 * 30);
+}, 60_000);
+
+// ====================================================================
+// 6. تعريف أوامر السلاش
+// ====================================================================
+const commands = [
+    new SlashCommandBuilder().setName('تعال').setDescription('يدخل البوت الفويس (للملكيين فقط)'),
+    new SlashCommandBuilder().setName('اطلع').setDescription('يطلع البوت من الفويس (للملكيين فقط)'),
+    new SlashCommandBuilder().setName('حالة').setDescription('حالة البوت'),
+    new SlashCommandBuilder().setName('نكتة').setDescription('نكتة من دايڤل'),
+    new SlashCommandBuilder().setName('تنبيه').setDescription('تنبيه ملكي (للملكيين فقط)'),
+    new SlashCommandBuilder().setName('فلوس').setDescription('اسأل عن راتبك'),
+    new SlashCommandBuilder().setName('سيرفر').setDescription('نبذة عن سيرفر دايڤل'),
+    new SlashCommandBuilder().setName('شعر').setDescription('شعر ملكي (للملكيين فقط)'),
+    new SlashCommandBuilder().setName('اكل').setDescription('اطلب أكل من العبد (للملكيين فقط)'),
+    new SlashCommandBuilder().setName('بينج').setDescription('سرعة البوت'),
+    new SlashCommandBuilder().setName('عملة').setDescription('ارمي عملة'),
+    new SlashCommandBuilder().setName('نرد').setDescription('ارمي نرد')
+        .addIntegerOption(o => o.setName('اوجه').setDescription('عدد أوجه النرد (الافتراضي 6)').setMinValue(2).setMaxValue(1000)),
+    new SlashCommandBuilder().setName('اختار').setDescription('البوت يختار لك من بين خيارات')
+        .addStringOption(o => o.setName('خيارات').setDescription('افصل بينها بفاصلة، مثال: بيتزا, برجر, كبسة').setRequired(true)),
+    new SlashCommandBuilder().setName('حجر').setDescription('حجر ورقة مقص ضد البوت')
+        .addStringOption(o => o.setName('اختيارك').setDescription('اختر').setRequired(true)
+            .addChoices(
+                { name: 'حجر 🪨', value: 'rock' },
+                { name: 'ورقة 📄', value: 'paper' },
+                { name: 'مقص ✂️', value: 'scissors' }
+            )),
+    new SlashCommandBuilder().setName('تخمين').setDescription('خمن الرقم من 1 إلى 10')
+        .addIntegerOption(o => o.setName('رقم').setDescription('تخمينك').setRequired(true).setMinValue(1).setMaxValue(10)),
+    new SlashCommandBuilder().setName('حب').setDescription('نسبة التوافق بين شخصين')
+        .addUserOption(o => o.setName('الاول').setDescription('الشخص الأول').setRequired(true))
+        .addUserOption(o => o.setName('الثاني').setDescription('الشخص الثاني (الافتراضي أنت)')),
+    new SlashCommandBuilder().setName('كرة').setDescription('كرة الحظ، اسأل سؤال')
+        .addStringOption(o => o.setName('سؤال').setDescription('سؤالك').setRequired(true)),
+    new SlashCommandBuilder().setName('مساعدة').setDescription('قائمة الأوامر')
+].map(c => c.toJSON()).concat(admin.commands);
+
+// ====================================================================
+// 7. تشغيل البوت
+// ====================================================================
+client.once('clientReady', async () => {
+    console.log(`🤖 Logged in as ${client.user.tag}!`);
+    try {
+        const guild = await client.guilds.fetch(CONFIG.GUILD_ID);
+        await guild.commands.set(commands);
+        console.log('✅ تم تسجيل أوامر السلاش');
+    } catch (err) {
+        console.error('❌ فشل تسجيل الأوامر:', err.message);
+    }
+    connectToVoice();
+});
+
+// ====================================================================
+// 8. معالج أوامر السلاش
+// ====================================================================
+const eightBall = [
+    'أكيد! ✅', 'بدون شك 👌', 'الأمور تبشر بخير 🌟', 'يمكن 🤔',
+    'اسأل بعدين ⏳', 'ما أتوقع ❌', 'لا والله 🚫', 'مستحيل 💀'
+];
+const rpsNames = { rock: '🪨 حجر', paper: '📄 ورقة', scissors: '✂️ مقص' };
+const rpsBeats = { rock: 'scissors', paper: 'rock', scissors: 'paper' };
+
+client.on('interactionCreate', async (interaction) => {
+    if (!interaction.isChatInputCommand()) return;
+    if (await admin.handle(interaction, { getTier, CONFIG, pick })) return;
+
+    const tier = getTier(interaction.user.id, interaction.member);
+    const name = interaction.commandName;
+    const denied = () => interaction.reply({
+        content: '❌ هذا الأمر خاص بمولاي ارثر والملكة إيدا وأصحاب الرتب بس! 💅',
+        flags: MessageFlags.Ephemeral
+    });
+
+    try {
+        switch (name) {
+            case 'تعال':
+                if (!hasAccess(tier)) return denied();
+                manualLeave = false;
+                connectToVoice();
+                return interaction.reply('🫡 أبشر يا طويل العمر، دخلت الفويس بأمرك السامي! 🎙️');
+
+            case 'اطلع':
+                if (!hasAccess(tier)) return denied();
+                disconnectFromVoice();
+                return interaction.reply('👋 سمعاً وطاعة، طلعت من الفويس يا طويل العمر! 🚪');
+
+            case 'حالة': {
+                const inVoice = connection && connection.state.status === VoiceConnectionStatus.Ready;
+                return interaction.reply(`${rp('status.'+tier)}\n📡 الفويس: ${inVoice ? 'متصل ✅' : 'غير متصل ❌'}`);
+            }
+
+            case 'نكتة':
+                return interaction.reply(`🎭 ${rp('jokes')}`);
+
+            case 'تنبيه':
+                if (!hasAccess(tier)) return denied();
+                return interaction.reply(rp('alerts'));
+
+            case 'فلوس':
+                return interaction.reply(
+                    (tier === 'arthur' || tier === 'ida')
+                        ? '💰 يا فخامة المقام، خزينة دايڤل كلها تحت أمرك، تبي نحول لك مليار دولار الحين؟ 🪙👑'
+                        : '💸 راتبك في دايڤل هو كف محترم لو عدت تسأل أسئلة مالها داعي! 😂'
+                );
+
+            case 'سيرفر':
+                return interaction.reply('🌟 سيرفر دايڤل أطخم وأفخم سيرفر بالديسكورد بفضل وجود مولاي ارثر والملكة إيدا على عرشه! 🔥👑');
+
+            case 'شعر':
+                if (!hasAccess(tier)) return denied();
+                return interaction.reply(rp('poems'));
+
+            case 'اكل':
+                if (!hasAccess(tier)) return denied();
+                return interaction.reply(rp('food.'+tier));
+
+            case 'بينج': {
+                const sent = await interaction.reply({ content: '🏓 ...', fetchReply: true });
+                const latency = sent.createdTimestamp - interaction.createdTimestamp;
+                return interaction.editReply(`🏓 بونغ! التأخير: **${latency}ms** | الويب سوكت: **${client.ws.ping}ms**`);
+            }
+
+            case 'عملة':
+                return interaction.reply(Math.random() < 0.5 ? '🪙 طلعت: **صورة**' : '🪙 طلعت: **كتابة**');
+
+            case 'نرد': {
+                const sides = interaction.options.getInteger('اوجه') ?? 6;
+                return interaction.reply(`🎲 رميت نرد (${sides} وجه) وطلع: **${1 + Math.floor(Math.random() * sides)}**`);
+            }
+
+            case 'اختار': {
+                const opts = interaction.options.getString('خيارات')
+                    .split(/[,،]/).map(s => s.trim()).filter(Boolean);
+                if (opts.length < 2) {
+                    return interaction.reply({ content: '⚠️ اكتب خيارين على الأقل وافصل بينها بفاصلة.', flags: MessageFlags.Ephemeral });
+                }
+                return interaction.reply(`🤔 اخترت لك: **${pick(opts)}**`);
+            }
+
+            case 'حجر': {
+                const mine = interaction.options.getString('اختيارك');
+                const bot = pick(['rock', 'paper', 'scissors']);
+                let result = 'تعادل 🤝';
+                if (rpsBeats[mine] === bot) result = 'فزت! 🎉';
+                else if (rpsBeats[bot] === mine) result = 'خسرت! 😂';
+                return interaction.reply(`أنت: ${rpsNames[mine]}\nأنا: ${rpsNames[bot]}\n**${result}**`);
+            }
+
+            case 'تخمين': {
+                const guess = interaction.options.getInteger('رقم');
+                const num = 1 + Math.floor(Math.random() * 10);
+                return interaction.reply(
+                    guess === num
+                        ? `🎯 الرقم كان **${num}**، خمنت صح! 🎉`
+                        : `❌ الرقم كان **${num}**، حاول مرة ثانية!`
+                );
+            }
+
+            case 'حب': {
+                const a = interaction.options.getUser('الاول');
+                const b = interaction.options.getUser('الثاني') ?? interaction.user;
+                const percent = Number((BigInt(a.id) + BigInt(b.id)) % 101n);
+                return interaction.reply(`💘 نسبة التوافق بين ${a} و ${b}: **${percent}%**`);
+            }
+
+            case 'كرة':
+                return interaction.reply(`🔮 سؤالك: ${interaction.options.getString('سؤال')}\nالجواب: **${pick(eightBall)}**`);
+
+            case 'مساعدة':
+                return interaction.reply(
+                    '**🛠️ أوامر البوت:**\n' +
+                    '👑 **ملكية:** `/تعال` `/اطلع` `/تنبيه` `/شعر` `/اكل`\n' +
+                    '🎮 **ترفيه:** `/نكتة` `/نرد` `/عملة` `/اختار` `/حجر` `/تخمين` `/حب` `/كرة`\n' +
+                    '📊 **عام:** `/حالة` `/بينج` `/فلوس` `/سيرفر`\n' +
+                    '🛡️ **إدارة:** `/طرد` `/حظر` `/فك_حظر` `/ميوت` `/فك_ميوت` `/مسح` `/قفل` `/فتح` `/بطيء` `/رتبة_اضافة` `/رتبة_ازالة` `/لقب` `/صوت` `/نقل` `/اعلان` `/تحذير` `/تحذيرات` `/معلومات_عضو` `/معلومات_سيرفر`\n' +
+                    '💬 وتقدر تناديني بـ **يا عبد** وأرد عليك!'
+                );
+        }
+    } catch (err) {
+        console.error('❌ خطأ في الأمر:', name, err);
+        if (!interaction.replied && !interaction.deferred) {
+            interaction.reply({ content: '⚠️ صار خطأ، حاول مرة ثانية.', flags: MessageFlags.Ephemeral }).catch(() => {});
+        }
+    }
+});
+
+// ====================================================================
+// 9. الردود النصية (لما أحد ينادي البوت فقط)
+// ====================================================================
+// كلمات مطابقة كاملة (تفادي التفعيل بالغلط مثل "كفاية" أو "جبل")
+const HIT_WORDS = ['اضربك', 'ضربك', 'كف', 'طراق', 'طق', 'ادقك', 'تسطير'];
+const RUDE_WORDS = ['غبي', 'حمار', 'انقلع', 'جب', 'زق'];
+const FOOD_WORDS = ['جوعان', 'اكل', 'أكل', 'جوعانين'];
+const THANKS_WORDS = ['شكرا', 'شكراً', 'مشكور', 'يعطيك', 'يسلمو'];
+const WHERE_WORDS = ['وينك', 'وينكم'];
+const MOVE_WORDS = ['قوم', 'تحرك'];
+const HELP_WORDS = ['اوامر', 'أوامر', 'مساعدة'];
+const POEM_WORDS = ['شعر', 'قصيدة'];
+
+function tokenize(text) {
+    return text.replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
+}
+
+client.on('messageCreate', async (message) => {
+    if (message.author.bot || !message.guild) return;
+
+    const content = message.content.trim();
+    if (!content) return;
+
+    const tokens = tokenize(content);
+    const tier = getTier(message.author.id, message.member);
+    const called =
+        message.mentions.has(client.user) ||
+        content.includes('يا عبد') ||
+        tokens.includes('عبد') ||
+        tokens.includes('العبد');
+
+    // الكلمات الخاصة (من لوحة التحكم): ارثر وإيدا والرتبة بدون مناداة، والعام عند المناداة
+    const rules = [];
+    if (tier !== 'peasant') rules.push(...R.get('custom.' + tier));
+    if (called && tier !== 'peasant') rules.push(...R.get('custom.all'));
+    const matches = rules
+        .map(l => l.split('=>').map(x => x.trim()))
+        .filter(([w, r]) => w && r && content.includes(w));
+    if (matches.length) {
+        if (!onCooldown(message.author.id)) message.reply(pick(matches)[1]);
+        return;
+    }
+
+    if (!called) return;
+
+    if (onCooldown(message.author.id)) return;
+
+    const has = (list) => tokens.some(t => list.includes(t));
+
+    // ضرب
+    if (has(HIT_WORDS)) return message.reply(rp('hit.'+tier));
+
+    // العشوائي
+    if (!hasAccess(tier)) {
+        return message.reply(has(RUDE_WORDS) ? rp('rude') : rp('greet.peasant'));
+    }
+
+    if (has(FOOD_WORDS)) return message.reply(rp('food.'+tier));
+    if (has(THANKS_WORDS)) return message.reply(rp('thanks.'+tier));
+    if (has(WHERE_WORDS)) return message.reply(rp('where.'+tier));
+    if (has(MOVE_WORDS)) return message.reply(rp('move.'+tier));
+    if (has(HELP_WORDS)) return message.reply(rp('help'));
+    if (has(POEM_WORDS)) return message.reply(rp('poems'));
+    if (tokens.includes('حالة') || content.includes('!status')) return message.reply(rp('status.'+tier));
+
+    return message.reply(rp('greet.'+tier));
+});
+
+// ====================================================================
+// 10. ترحيب تلقائي عند دخول ارثر أو إيدا الفويس
+// ====================================================================
+const welcomeCooldown = new Map();
+client.on('voiceStateUpdate', async (oldState, newState) => {
+    try {
+        if (!CONFIG.WELCOME_TEXT_CHANNEL_ID) return;
+        if (newState.channelId !== CONFIG.VOICE_CHANNEL_ID || oldState.channelId === CONFIG.VOICE_CHANNEL_ID) return;
+
+        const id = newState.id;
+        const key = id === CONFIG.ARTHUR_ID ? 'arthur' : id === CONFIG.SPECIAL_USER_ID ? 'ida' : null;
+        if (!key) return;
+
+        const last = welcomeCooldown.get(id) || 0;
+        if (Date.now() - last < 10 * 60_000) return;
+        welcomeCooldown.set(id, Date.now());
+
+        const ch = await client.channels.fetch(CONFIG.WELCOME_TEXT_CHANNEL_ID);
+        if (ch && ch.isTextBased()) ch.send(rp('welcome.'+key));
+    } catch (err) {
+        console.error('❌ ترحيب:', err.message);
+    }
+});
+
+// ====================================================================
+// 11. الأمان: منع الكراش + تنبيه الذاكرة
+// ====================================================================
+process.on('unhandledRejection', (err) => console.error('⚠️ unhandledRejection:', err));
+process.on('uncaughtException', (err) => console.error('⚠️ uncaughtException:', err));
+
+setInterval(() => {
+    const mb = process.memoryUsage().heapUsed / 1024 / 1024;
+    if (mb > 200) console.log(`🧠 استهلاك الذاكرة: ${mb.toFixed(2)} MB`);
+}, 30 * 60_000);
 
 client.login(process.env.DISCORD_TOKEN);
-console.log("🚀 تم تفعيل الأوامر الملكية الخاصة بارثر والملكة إيدا بنجاح تام في سيرفر دايڤل!");
