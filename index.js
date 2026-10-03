@@ -10,6 +10,7 @@ const R = require('./replies');
 const store = require('./store');
 const mountDashboard = require('./dashboard');
 const welcome = require('./welcome');
+const tickets = require('./tickets');
 const admin = require('./admin');
 const points = require('./points');
 const games = require('./games');
@@ -194,7 +195,7 @@ const commands = [
     new SlashCommandBuilder().setName('كرة').setDescription('كرة الحظ، اسأل سؤال')
         .addStringOption(o => o.setName('سؤال').setDescription('سؤالك').setRequired(true)),
     new SlashCommandBuilder().setName('مساعدة').setDescription('قائمة الأوامر')
-].map(c => c.toJSON()).concat(admin.commands, points.commands, games.commands);
+].map(c => c.toJSON()).concat(admin.commands, points.commands, games.commands, tickets.commands);
 
 // ====================================================================
 // 7. تشغيل البوت
@@ -225,7 +226,9 @@ const rpsNames = { rock: '🪨 حجر', paper: '📄 ورقة', scissors: '✂�
 const rpsBeats = { rock: 'scissors', paper: 'rock', scissors: 'paper' };
 
 client.on('interactionCreate', async (interaction) => {
+    if (interaction.isButton()) { await tickets.handleButton(interaction, { getTier, CONFIG, pick }); return; }
     if (!interaction.isChatInputCommand()) return;
+    if (await tickets.handle(interaction, { getTier, CONFIG, pick })) return;
     if (await games.handle(interaction, { getTier, CONFIG, pick })) return;
     if (await points.handle(interaction, { getTier, CONFIG, pick })) return;
     if (await admin.handle(interaction, { getTier, CONFIG, pick })) return;

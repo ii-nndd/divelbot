@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { ChannelType, EmbedBuilder } = require('discord.js');
 const store = require('./store');
 const welcome = require('./welcome');
+const tickets = require('./tickets');
 
 const BASE = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'https://divelbot.onrender.com';
 const SECRET = process.env.SESSION_SECRET;
@@ -65,7 +66,7 @@ function card(title,child){return el('div',{class:'card'},[title?el('div',{class
 function row(k){return el('div',{class:'row'},k)}
 function go(fn,msg,page){fn.then(function(){toast(msg||'تم ✅');if(page)show(page)}).catch(function(e){toast(e.message,1)})}
 var pages={},cur='overview';
-var NAV=[['overview','نظرة عامة'],['channels','الرومات'],['roles','الرتب'],['members','الأعضاء'],['members','الأعضاء'],['welcome','الترحيب'],['announce','الإعلانات'],['log','السجل']];
+var NAV=[['overview','نظرة عامة'],['channels','الرومات'],['roles','الرتب'],['members','الأعضاء'],['members','الأعضاء'],['welcome','الترحيب'],['tickets','التذاكر'],['announce','الإعلانات'],['log','السجل']];
 function show(p){cur=p;var m=$('main');m.innerHTML='';[].forEach.call(document.querySelectorAll('.nav'),function(n){n.className='nav'+(n.dataset.p===p?' on':'')});pages[p](m).catch(function(e){toast(e.message,1)})}
 pages.overview=function(m){return api('overview').then(function(d){m.appendChild(el('h1',{text:d.name}));m.appendChild(el('div',{class:'mut',text:'تحكم كامل بالسيرفر، والتعديل ينفذ فور الضغط'}));
 var s=el('div',{class:'stats'});[['الأعضاء',d.members],['الرومات',d.channels],['الرتب',d.roles]].forEach(function(x){s.appendChild(el('div',{class:'card'},[el('div',{class:'mut',text:x[0]}),el('div',{class:'big',text:String(x[1])})]))});m.appendChild(s)})};
@@ -117,6 +118,21 @@ m.appendChild(card('رسالة الوداع (نفس الروم)',el('div',{},[la
 m.appendChild(card('رتبة تلقائية للداخلين',rl));
 m.appendChild(row([el('button',{class:'btn',text:'حفظ',on:{click:function(){go(api('welcome/save',body()),'انحفظ ✅',null)}}}),
 el('button',{class:'b2',text:'جرّب الترحيب',on:{click:function(){api('welcome/save',body()).then(function(){return api('welcome/test',{})}).then(function(){toast('انرسلت رسالة تجربة ✅')}).catch(function(e){toast(e.message,1)})}}})]))})};
+pages.tickets=function(m){return api('tickets').then(function(d){var c=d.config;
+m.appendChild(el('h1',{text:'التذاكر'}));m.appendChild(el('div',{class:'mut',text:'التذاكر المفتوحة الآن: '+d.open+' • المتغير {user} في رسالة الترحيب يمنشن صاحب التذكرة'}));
+function lab(t,k){return el('label',{class:'row',style:'margin:10px 0'},[k,el('span',{text:t})])}
+function sel(first,list,val){var s=el('select',{},[opt('',first)].concat(list.map(function(x){return opt(x.id,x.name)})));s.value=val||'';return s}
+var en=el('input',{type:'checkbox'});en.checked=c.enabled;
+var cat=sel('بدون قسم (أنشئ الروم برا الأقسام)',d.categories,c.categoryId),st=sel('بدون رتبة دعم',d.roles,c.staffRoleId),lg=sel('بدون سجل',d.channels,c.logChannelId);
+var pt=el('input',{style:'width:100%',value:c.panelTitle}),px=el('textarea',{}),bl=el('input',{style:'width:100%',value:c.buttonLabel}),wt=el('textarea',{}),mx=el('input',{type:'number',min:'1',max:'5',value:String(c.maxOpen)});
+px.value=c.panelText;wt.value=c.welcomeText;
+function body(){return{enabled:en.checked,categoryId:cat.value,staffRoleId:st.value,logChannelId:lg.value,panelTitle:pt.value,panelText:px.value,buttonLabel:bl.value,welcomeText:wt.value,maxOpen:mx.value}}
+m.appendChild(card('الإعدادات',el('div',{},[lab('تفعيل نظام التذاكر',en),el('div',{class:'mut',text:'القسم اللي تنفتح فيه التذاكر'}),cat,el('p'),el('div',{class:'mut',text:'رتبة الدعم (تشوف كل التذاكر)'}),st,el('p'),el('div',{class:'mut',text:'روم سجل التذاكر (تنحفظ فيه نسخة المحادثة عند الإغلاق)'}),lg,el('p'),el('div',{class:'mut',text:'أقصى عدد تذاكر مفتوحة لكل عضو'}),mx])));
+m.appendChild(card('شكل لوحة التذاكر',el('div',{},[pt,el('p'),px,el('p'),bl])));
+m.appendChild(card('رسالة داخل التذكرة',wt));
+var pc=sel('اختر الروم اللي تنرسل فيه اللوحة',d.channels,'');pc.firstChild.value='';
+m.appendChild(row([el('button',{class:'btn',text:'حفظ',on:{click:function(){go(api('tickets/save',body()),'انحفظ ✅',null)}}})]));
+m.appendChild(card('إرسال لوحة التذاكر',row([pc,el('button',{class:'b2',text:'أرسل اللوحة',on:{click:function(){if(!pc.value)return toast('اختر الروم أول',1);api('tickets/save',body()).then(function(){return api('tickets/panel',{channelId:pc.value})}).then(function(){toast('انرسلت اللوحة ✅')}).catch(function(e){toast(e.message,1)})}}})])))})};
 pages.log=function(m){return api('log').then(function(d){m.appendChild(el('h1',{text:'السجل'}));var b=el('div',{class:'card'});
 if(!d.log.length)b.appendChild(el('div',{class:'mut',text:'ما فيه إجراءات للحين'}));d.log.forEach(function(l){b.appendChild(el('div',{class:'item'},[el('span',{class:'nm',text:l.msg}),el('span',{class:'mut',text:l.by+' • '+new Date(l.at).toLocaleString('ar')})]))});m.appendChild(b)})};
 pages.members=function(m){m.appendChild(el('h1',{text:'الأعضاء'}));
@@ -381,6 +397,24 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         const c = chan(g, cfg.channelId);
         await c.send(welcome.build(cfg, { id: req.user.id, mention: `<@${req.user.id}>`, name: req.user.name, server: g.name, count: g.memberCount }));
         note(req, 'تجربة رسالة الترحيب');
+    }));
+
+    api.get('/tickets', h(async (g) => {
+        await g.channels.fetch(); await g.roles.fetch();
+        const ch = [...g.channels.cache.values()];
+        return {
+            config: tickets.get(g.id), open: tickets.openCount(g.id),
+            categories: ch.filter(c => isCat(c)).map(c => ({ id: c.id, name: c.name })),
+            channels: ch.filter(c => c.type === ChannelType.GuildText).map(c => ({ id: c.id, name: '# ' + c.name })),
+            roles: [...g.roles.cache.values()].filter(r => r.id !== g.id && !r.managed).sort((a, b) => b.position - a.position).map(r => ({ id: r.id, name: r.name }))
+        };
+    }));
+    api.post('/tickets/save', h(async (g, b, req) => { tickets.set(g.id, b); note(req, 'تعديل إعدادات التذاكر'); }));
+    api.post('/tickets/panel', h(async (g, b, req) => {
+        const c = chan(g, b.channelId);
+        if (c.type !== ChannelType.GuildText) throw new Error('اختر روم نصي');
+        await c.send(tickets.panelMessage(tickets.get(g.id)));
+        note(req, `إرسال لوحة التذاكر في #${c.name}`);
     }));
 
     app.use('/dashboard/api', api);
