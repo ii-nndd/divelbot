@@ -9,6 +9,7 @@ const express = require('express');
 const R = require('./replies');
 const store = require('./store');
 const mountDashboard = require('./dashboard');
+const welcome = require('./welcome');
 const admin = require('./admin');
 const points = require('./points');
 const games = require('./games');
@@ -46,7 +47,8 @@ const client = new Client({
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildVoiceStates,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers   // للترحيب وصفحة الأعضاء: فعّل Server Members Intent في موقع المطورين
     ]
 });
 
@@ -58,6 +60,7 @@ const rp = (key) => pick(R.get(key));
 
 // لوحة التحكم الكاملة (/dashboard)
 mountDashboard(app, express, client, CONFIG);
+welcome.init(client);
 
 function getTier(userId, member) {
     if (userId === CONFIG.ARTHUR_ID) return 'arthur';
@@ -498,6 +501,28 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 // ====================================================================
 // 11. الأمان: منع الكراش + تنبيه الذاكرة
 // ====================================================================
+// ====================================================================
+// 10.5 حماية ارثر وإيدا: لو أحد كتمهم أو صمّمهم بالفويس يرجعون تلقائياً
+// ====================================================================
+const isRoyal = (id) => id === CONFIG.ARTHUR_ID || id === CONFIG.SPECIAL_USER_ID;
+
+client.on('voiceStateUpdate', async (oldState, newState) => {
+    try {
+        if (!isRoyal(newState.id) || !newState.channel) return;
+        if (newState.serverMute) await newState.setMute(false, 'حماية ملكية');
+        if (newState.serverDeaf) await newState.setDeaf(false, 'حماية ملكية');
+    } catch {}
+});
+
+// فك التايم اوت تلقائياً (يشتغل فقط لو MEMBERS_INTENT مفعّل)
+client.on('guildMemberUpdate', async (oldMember, newMember) => {
+    try {
+        if (!isRoyal(newMember.id)) return;
+        const until = newMember.communicationDisabledUntilTimestamp;
+        if (until && until > Date.now()) await newMember.timeout(null, 'حماية ملكية');
+    } catch {}
+});
+
 process.on('unhandledRejection', (err) => console.error('⚠️ unhandledRejection:', err));
 process.on('uncaughtException', (err) => console.error('⚠️ uncaughtException:', err));
 
@@ -506,4 +531,20 @@ setInterval(() => {
     if (mb > 200) console.log(`🧠 استهلاك الذاكرة: ${mb.toFixed(2)} MB`);
 }, 30 * 60_000);
 
-client.login(process.env.DISCORD_TOKEN);
+// تشغيل البوت. لو Server Members Intent مو مفعل نشغله بدونه (الترحيب وصفحة الأعضاء يتعطلون بس)
+(async () => {
+    try {
+        await client.login(process.env.DISCORD_TOKEN);
+    } catch (err) {
+        if (err.code === 'DisallowedIntents' || /disallowed intents|privileged intent/i.test(String(err.message))) {
+            console.error('⚠️ Server Members Intent مو مفعل في موقع المطورين، أشغل البوت بدونه (الترحيب وصفحة الأعضاء معطلين)');
+            try {
+                client.destroy();
+                client.options.intents.remove(GatewayIntentBits.GuildMembers);
+                await client.login(process.env.DISCORD_TOKEN);
+            } catch (e2) { console.error('❌ فشل تشغيل البوت:', e2.message); }
+        } else {
+            console.error('❌ فشل تشغيل البوت:', err.message);
+        }
+    }
+})();

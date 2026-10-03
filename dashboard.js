@@ -4,6 +4,7 @@
 const crypto = require('crypto');
 const { ChannelType, EmbedBuilder } = require('discord.js');
 const store = require('./store');
+const welcome = require('./welcome');
 
 const BASE = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'https://divelbot.onrender.com';
 const SECRET = process.env.SESSION_SECRET;
@@ -64,7 +65,7 @@ function card(title,child){return el('div',{class:'card'},[title?el('div',{class
 function row(k){return el('div',{class:'row'},k)}
 function go(fn,msg,page){fn.then(function(){toast(msg||'تم ✅');if(page)show(page)}).catch(function(e){toast(e.message,1)})}
 var pages={},cur='overview';
-var NAV=[['overview','نظرة عامة'],['channels','الرومات'],['roles','الرتب'],['announce','الإعلانات'],['log','السجل']];
+var NAV=[['overview','نظرة عامة'],['channels','الرومات'],['roles','الرتب'],['members','الأعضاء'],['members','الأعضاء'],['welcome','الترحيب'],['announce','الإعلانات'],['log','السجل']];
 function show(p){cur=p;var m=$('main');m.innerHTML='';[].forEach.call(document.querySelectorAll('.nav'),function(n){n.className='nav'+(n.dataset.p===p?' on':'')});pages[p](m).catch(function(e){toast(e.message,1)})}
 pages.overview=function(m){return api('overview').then(function(d){m.appendChild(el('h1',{text:d.name}));m.appendChild(el('div',{class:'mut',text:'تحكم كامل بالسيرفر، والتعديل ينفذ فور الضغط'}));
 var s=el('div',{class:'stats'});[['الأعضاء',d.members],['الرومات',d.channels],['الرتب',d.roles]].forEach(function(x){s.appendChild(el('div',{class:'card'},[el('div',{class:'mut',text:x[0]}),el('div',{class:'big',text:String(x[1])})]))});m.appendChild(s)})};
@@ -90,8 +91,51 @@ box.appendChild(el('div',{class:'item'},k))});m.appendChild(box)})};
 pages.announce=function(m){return api('channels').then(function(d){m.appendChild(el('h1',{text:'الإعلانات'}));
 var ch=el('select',{},d.channels.filter(function(c){return c.type==='text'}).map(function(c){return opt(c.id,'# '+c.name)})),t=el('input',{placeholder:'العنوان (اختياري)',style:'width:100%;margin:10px 0'}),x=el('textarea',{placeholder:'نص الإعلان'});
 m.appendChild(card('',el('div',{},[ch,t,x,el('div',{style:'margin-top:10px'},[el('button',{class:'btn',text:'إرسال الإعلان',on:{click:function(){go(api('announce',{channelId:ch.value,title:t.value,text:x.value}),'انرسل ✅')}}})])])))})};
+pages.members=function(m){m.appendChild(el('h1',{text:'الأعضاء'}));
+var q=el('input',{placeholder:'ابحث بالاسم',style:'flex:1;min-width:160px'}),box=el('div',{class:'card'});
+function act(path,body,msg){go(api(path,body),msg,null);setTimeout(load,900)}
+function load(){box.innerHTML='';box.appendChild(el('div',{class:'mut',text:'جاري البحث...'}));
+api('members?q='+encodeURIComponent(q.value)).then(function(d){box.innerHTML='';if(!d.members.length)box.appendChild(el('div',{class:'mut',text:'ما لقيت أحد'}));
+d.members.forEach(function(u){var k=[el('img',{src:u.avatar,width:'36',height:'36',style:'border-radius:50%'}),el('span',{class:'nm',text:u.name+(u.bot?' (بوت)':'')})];
+u.roles.forEach(function(r){k.push(el('span',{class:'tag',text:r}))});
+k.push(el('button',{class:'b2',text:'ميوت',on:{click:function(){var n=prompt('كم دقيقة؟ (0 لفك الميوت)','10');if(n!==null)act('members/timeout',{id:u.id,minutes:Number(n)},'تم ✅')}}}));
+k.push(el('button',{class:'dn',text:'طرد',on:{click:function(){if(confirm('تأكيد طرد '+u.name+' ؟'))act('members/kick',{id:u.id,confirm:true},'تم الطرد')}}}));
+k.push(el('button',{class:'dn',text:'حظر',on:{click:function(){if(confirm('تأكيد حظر '+u.name+' ؟'))act('members/ban',{id:u.id,confirm:true},'تم الحظر')}}}));
+box.appendChild(el('div',{class:'item'},k))})}).catch(function(e){box.innerHTML='';box.appendChild(el('div',{class:'mut',text:e.message}))})}
+m.appendChild(card('',row([q,el('button',{class:'btn',text:'بحث',on:{click:load}})])));m.appendChild(box);load();return Promise.resolve()};
+pages.welcome=function(m){return api('welcome').then(function(d){var c=d.config;
+m.appendChild(el('h1',{text:'الترحيب'}));m.appendChild(el('div',{class:'mut',text:'المتغيرات: {user} المنشن، {name} الاسم، {server} اسم السيرفر، {count} رقم العضو'}));
+function lab(t,k){return el('label',{class:'row',style:'margin:10px 0'},[k,el('span',{text:t})])}
+var en=el('input',{type:'checkbox'});en.checked=c.enabled;
+var ch=el('select',{},[opt('','اختر روم الترحيب')].concat(d.channels.map(function(x){return opt(x.id,'# '+x.name)})));ch.value=c.channelId;
+var ti=el('input',{style:'width:100%',value:c.title}),ms=el('textarea',{});ms.value=c.message;
+var le=el('input',{type:'checkbox'});le.checked=c.leaveEnabled;var lm=el('input',{style:'width:100%',value:c.leaveMessage});
+var rl=el('select',{},[opt('','بدون رتبة تلقائية')].concat(d.roles.map(function(x){return opt(x.id,x.name)})));rl.value=c.autoRoleId;
+function body(){return{enabled:en.checked,channelId:ch.value,title:ti.value,message:ms.value,leaveEnabled:le.checked,leaveMessage:lm.value,autoRoleId:rl.value}}
+m.appendChild(card('ترحيب الداخلين',el('div',{},[lab('تفعيل الترحيب',en),ch,el('p'),ti,el('p'),ms])));
+m.appendChild(card('رسالة الوداع (نفس الروم)',el('div',{},[lab('تفعيل رسالة الوداع',le),lm])));
+m.appendChild(card('رتبة تلقائية للداخلين',rl));
+m.appendChild(row([el('button',{class:'btn',text:'حفظ',on:{click:function(){go(api('welcome/save',body()),'انحفظ ✅',null)}}}),
+el('button',{class:'b2',text:'جرّب الترحيب',on:{click:function(){api('welcome/save',body()).then(function(){return api('welcome/test',{})}).then(function(){toast('انرسلت رسالة تجربة ✅')}).catch(function(e){toast(e.message,1)})}}})]))})};
 pages.log=function(m){return api('log').then(function(d){m.appendChild(el('h1',{text:'السجل'}));var b=el('div',{class:'card'});
 if(!d.log.length)b.appendChild(el('div',{class:'mut',text:'ما فيه إجراءات للحين'}));d.log.forEach(function(l){b.appendChild(el('div',{class:'item'},[el('span',{class:'nm',text:l.msg}),el('span',{class:'mut',text:l.by+' • '+new Date(l.at).toLocaleString('ar')})]))});m.appendChild(b)})};
+pages.members=function(m){m.appendChild(el('h1',{text:'الأعضاء'}));
+var q=el('input',{placeholder:'آي دي العضو أو اسمه',style:'flex:1;min-width:200px'}),out=el('div',{});
+function find(v){out.innerHTML='';Promise.all([api('members/search?q='+encodeURIComponent(v)),api('roles')]).then(function(r){
+if(!r[0].members.length){out.appendChild(card('',el('div',{class:'mut',text:'ما فيه نتائج'})));return}
+r[0].members.forEach(function(x){out.appendChild(mcard(x,r[1].roles.filter(function(y){return y.editable})))})}).catch(function(e){toast(e.message,1)})}
+function mcard(x,roles){var c=el('div',{class:'card'});
+c.appendChild(el('div',{class:'row'},[el('img',{src:x.avatar,width:'44',height:'44',style:'border-radius:50%'}),el('div',{},[el('div',{text:x.name+(x.bot?' (بوت)':'')}),el('div',{class:'mut',text:x.user+' • '+x.id})])]));
+var rl=el('div',{class:'row',style:'margin:10px 0'});x.roles.forEach(function(r){rl.appendChild(el('span',{class:'tag',text:r.name}))});if(x.timedOut)rl.appendChild(el('span',{class:'tag',text:'مكتوم'}));c.appendChild(rl);
+if(x.owner){c.appendChild(el('div',{class:'mut',text:'محمي 👑'}));return c}
+function act(a,ex,msg,gone){api('members/action',Object.assign({id:x.id,action:a},ex||{})).then(function(){toast(msg||'تم ✅');if(gone)out.innerHTML='';else find(x.id)}).catch(function(e){toast(e.message,1)})}
+var mins=el('input',{type:'number',value:'10',min:'1',style:'width:90px'}),nick=el('input',{placeholder:'اللقب الجديد'}),rs=el('select',{},roles.map(function(r){return opt(r.id,r.name)}));
+c.appendChild(row([mins,el('button',{class:'b2',text:'كتم بالدقائق',on:{click:function(){act('timeout',{minutes:Number(mins.value)},'تم الكتم ✅')}}}),el('button',{class:'b2',text:'فك الكتم',on:{click:function(){act('untimeout',{},'تم فك الكتم ✅')}}})]));
+c.appendChild(el('p'));c.appendChild(row([nick,el('button',{class:'b2',text:'تغيير اللقب',on:{click:function(){act('nick',{nick:nick.value})}}})]));
+c.appendChild(el('p'));c.appendChild(row([rs,el('button',{class:'b2',text:'إضافة رتبة',on:{click:function(){act('addrole',{roleId:rs.value})}}}),el('button',{class:'b2',text:'سحب رتبة',on:{click:function(){act('removerole',{roleId:rs.value})}}})]));
+c.appendChild(el('p'));c.appendChild(row([el('button',{class:'dn',text:'طرد',on:{click:function(){if(confirm('تأكيد طرد '+x.name+' ؟'))act('kick',{confirm:true},'تم الطرد',true)}}}),el('button',{class:'dn',text:'حظر',on:{click:function(){if(confirm('تأكيد حظر '+x.name+' ؟'))act('ban',{confirm:true},'تم الحظر',true)}}})]));return c}
+m.appendChild(card('بحث',row([q,el('button',{class:'btn',text:'بحث',on:{click:function(){if(q.value.trim())find(q.value.trim())}}})])));
+m.appendChild(el('div',{class:'mut',text:'الآي دي يشتغل دايماً. البحث بالاسم يحتاج تفعيل MEMBERS_INTENT.',style:'margin-bottom:12px'}));m.appendChild(out);return Promise.resolve()};
 function boot(){api('me').then(function(d){var r=$('root');
 if(!d.enabled){r.appendChild(el('div',{class:'main'},[card('',el('div',{text:'اللوحة غير مفعلة: ناقص DISCORD_CLIENT_ID أو DISCORD_CLIENT_SECRET أو SESSION_SECRET في Render'}))]));return}
 if(!d.user){r.appendChild(el('div',{class:'main'},[el('h1',{text:'لوحة دايڤل الملكية'}),el('div',{class:'mut',text:'سجّل دخولك بحساب ديسكورد (ارثر وإيدا فقط)'}),el('p'),el('a',{class:'btn',href:'/auth/login',text:'تسجيل الدخول بديسكورد'})]));return}
@@ -236,6 +280,107 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         const text = String(b.text || '').trim().slice(0, 1800); if (!text) throw new Error('النص فاضي');
         await c.send({ embeds: [new EmbedBuilder().setColor(0xd4af37).setTitle(clean(b.title) || '📢 إعلان ملكي').setDescription(text).setFooter({ text: `بأمر ${req.user.name}` }).setTimestamp()] });
         note(req, `إعلان في #${c.name}`);
+    }));
+
+    const mInfo = (m) => ({
+        id: m.id, name: m.displayName, user: m.user.username, bot: m.user.bot, owner: owners.has(m.id),
+        avatar: m.displayAvatarURL({ size: 64 }),
+        timedOut: !!(m.communicationDisabledUntilTimestamp && m.communicationDisabledUntilTimestamp > Date.now()),
+        roles: [...m.roles.cache.values()].filter(r => r.id !== m.guild.id).map(r => ({ id: r.id, name: r.name }))
+    });
+    const getMember = (g, id) => g.members.fetch(String(id)).catch(() => { throw new Error('ما لقيت العضو بالسيرفر'); });
+
+    api.get('/members/search', h(async (g, b, req) => {
+        const q = String(req.query.q || '').trim();
+        const id = (q.match(/\d{17,20}/) || [])[0];
+        if (id) return { members: [mInfo(await getMember(g, id))] };
+        if (process.env.MEMBERS_INTENT !== '1') throw new Error('البحث بالاسم غير مفعل: ابحث بالآي دي، أو أضف MEMBERS_INTENT=1');
+        if (q.length < 2) throw new Error('اكتب حرفين على الأقل');
+        return { members: [...(await g.members.search({ query: q, limit: 10 })).values()].map(mInfo) };
+    }));
+
+    api.post('/members/action', h(async (g, b, req) => {
+        const m = await getMember(g, b.id);
+        if (owners.has(m.id)) throw new Error('ما أمس الملوك 👑');
+        if (m.id === client.user.id) throw new Error('ما أسوي هذا بنفسي');
+        const why = clean(b.reason) || 'من لوحة التحكم';
+        const no = (t) => { throw new Error(t); };
+        switch (b.action) {
+            case 'kick':
+                if (b.confirm !== true) no('يحتاج تأكيد'); if (!m.kickable) no('ما أقدر أطرده (رتبته أعلى مني أو ما عندي صلاحية)');
+                await m.kick(why); note(req, `طرد: ${m.user.username}`); break;
+            case 'ban':
+                if (b.confirm !== true) no('يحتاج تأكيد'); if (!m.bannable) no('ما أقدر أحظره (رتبته أعلى مني أو ما عندي صلاحية)');
+                await g.members.ban(m.id, { reason: why }); note(req, `حظر: ${m.user.username}`); break;
+            case 'timeout': {
+                const mins = Number(b.minutes);
+                if (!Number.isInteger(mins) || mins < 1 || mins > 40320) no('المدة من 1 إلى 40320 دقيقة');
+                if (!m.moderatable) no('ما أقدر أكتمه (رتبته أعلى مني أو ما عندي صلاحية)');
+                await m.timeout(mins * 60_000, why); note(req, `كتم ${m.user.username} لمدة ${mins} دقيقة`); break;
+            }
+            case 'untimeout':
+                if (!m.moderatable) no('ما أقدر أعدل عليه'); await m.timeout(null, why); note(req, `فك كتم: ${m.user.username}`); break;
+            case 'nick':
+                if (!m.manageable) no('ما أقدر أغير لقبه'); await m.setNickname(clean(b.nick) || null, why); note(req, `تغيير لقب: ${m.user.username}`); break;
+            case 'addrole': case 'removerole': {
+                const r = role(g, b.roleId);
+                if (!r.editable || r.managed) no('ما أقدر أتحكم بهذي الرتبة');
+                if (b.action === 'addrole') await m.roles.add(r, why); else await m.roles.remove(r, why);
+                note(req, `${b.action === 'addrole' ? 'إعطاء' : 'سحب'} رتبة ${r.name}: ${m.user.username}`); break;
+            }
+            default: no('إجراء غير معروف');
+        }
+    }));
+
+    const target = async (g, id) => {
+        const m = await g.members.fetch(String(id)).catch(() => null);
+        if (!m) throw new Error('العضو مو موجود');
+        if (owners.has(m.id)) throw new Error('ما أمس الملوك 👑');
+        if (m.id === client.user.id) throw new Error('ما أقدر أسوي هذا بنفسي');
+        return m;
+    };
+    api.get('/members', h(async (g, b, req) => {
+        const list = await g.members.fetch({ query: String(req.query.q || '').slice(0, 32), limit: 25 })
+            .catch(() => { throw new Error('فعّل Server Members Intent من موقع المطورين ثم أعد تشغيل البوت'); });
+        return { members: [...list.values()].map(m => ({
+            id: m.id, name: m.displayName, bot: m.user.bot, avatar: m.displayAvatarURL({ size: 64 }),
+            roles: m.roles.cache.filter(r => r.id !== g.id).map(r => r.name).slice(0, 4)
+        })) };
+    }));
+    api.post('/members/kick', h(async (g, b, req) => {
+        if (b.confirm !== true) throw new Error('يحتاج تأكيد');
+        const m = await target(g, b.id); if (!m.kickable) throw new Error('رتبة البوت أقل من العضو');
+        await m.kick('من لوحة التحكم'); note(req, `طرد: ${m.user.username}`);
+    }));
+    api.post('/members/ban', h(async (g, b, req) => {
+        if (b.confirm !== true) throw new Error('يحتاج تأكيد');
+        const m = await target(g, b.id); if (!m.bannable) throw new Error('رتبة البوت أقل من العضو');
+        await m.ban({ reason: 'من لوحة التحكم' }); note(req, `حظر: ${m.user.username}`);
+    }));
+    api.post('/members/timeout', h(async (g, b, req) => {
+        const mins = Math.floor(Number(b.minutes));
+        if (!(mins >= 0 && mins <= 40320)) throw new Error('المدة من 0 إلى 40320 دقيقة');
+        const m = await target(g, b.id); if (!m.moderatable) throw new Error('ما أقدر أكتم هذا العضو');
+        await m.timeout(mins ? mins * 60_000 : null, 'من لوحة التحكم');
+        note(req, mins ? `ميوت ${mins} دقيقة: ${m.user.username}` : `فك ميوت: ${m.user.username}`);
+    }));
+
+    api.get('/welcome', h(async (g) => {
+        await g.channels.fetch(); await g.roles.fetch();
+        return {
+            config: welcome.get(g.id),
+            channels: [...g.channels.cache.values()].filter(c => c.type === ChannelType.GuildText).map(c => ({ id: c.id, name: c.name })),
+            roles: [...g.roles.cache.values()].filter(r => r.id !== g.id && !r.managed && r.editable)
+                .sort((a, b) => b.position - a.position).map(r => ({ id: r.id, name: r.name }))
+        };
+    }));
+    api.post('/welcome/save', h(async (g, b, req) => { welcome.set(g.id, b); note(req, 'تعديل إعدادات الترحيب'); }));
+    api.post('/welcome/test', h(async (g, b, req) => {
+        const cfg = welcome.get(g.id);
+        if (!cfg.channelId) throw new Error('اختر روم الترحيب واحفظ أول');
+        const c = chan(g, cfg.channelId);
+        await c.send(welcome.build(cfg, { id: req.user.id, mention: `<@${req.user.id}>`, name: req.user.name, server: g.name, count: g.memberCount }));
+        note(req, 'تجربة رسالة الترحيب');
     }));
 
     app.use('/dashboard/api', api);
