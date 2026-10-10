@@ -172,7 +172,7 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
 
     // تثبيت اللوحة كتطبيق على الجوال (PWA)
     app.get('/manifest.webmanifest', (req, res) => res.type('application/manifest+json').send(JSON.stringify({
-        name: 'لوحة دايڤل الملكية', short_name: 'DVIEL', lang: 'ar', dir: 'rtl',
+        id: '/dashboard', name: 'لوحة دايڤل الملكية', short_name: 'DVIEL', lang: 'ar', dir: 'rtl', categories: ['utilities'],
         start_url: '/dashboard', scope: '/', display: 'standalone', orientation: 'portrait',
         background_color: '#0f0e14', theme_color: '#0f0e14',
         icons: [
@@ -183,6 +183,9 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
     })));
     app.get('/sw.js', (req, res) => res.type('application/javascript').set('Cache-Control', 'no-cache')
         .send("self.addEventListener('install',function(){self.skipWaiting()});self.addEventListener('activate',function(e){e.waitUntil(self.clients.claim())});self.addEventListener('fetch',function(){});"));
+    // ربط ملف APK بالموقع (يشيل شريط المتصفح من التطبيق). تحط ملف assetlinks.json في جذر الريبو
+    app.get('/.well-known/assetlinks.json', (req, res) =>
+        res.type('application/json').sendFile(path.join(__dirname, 'assetlinks.json'), (err) => { if (err && !res.headersSent) res.status(404).json([]); }));
     for (const f of ['icon-192.png', 'icon-512.png', 'icon-maskable.png']) {
         app.get('/' + f, (req, res) => res.sendFile(path.join(__dirname, f), (err) => { if (err) res.status(404).end(); }));
     }
