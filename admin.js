@@ -251,4 +251,4 @@ async function handle(i, ctx) {
     return true;
 }
 
-module.exports = { commands, handle };
+module.exports = { commands, handle, run, LEVEL };

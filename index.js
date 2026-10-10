@@ -12,6 +12,7 @@ const mountDashboard = require('./dashboard');
 const welcome = require('./welcome');
 const tickets = require('./tickets');
 const admin = require('./admin');
+const nlcommands = require('./nlcommands');
 const points = require('./points');
 const games = require('./games');
 const mountPanel = require('./panel');
@@ -20,10 +21,10 @@ const mountPanel = require('./panel');
 // 1. الإعدادات (عدل الآي ديهات هنا فقط)
 // ====================================================================
 const CONFIG = {
-    GUILD_ID: '1545100203751645224',
-    VOICE_CHANNEL_ID: '1545729488938205274',
+    GUILD_ID: '1556028798183546900',
+    VOICE_CHANNEL_ID: '1556028799865327729',
     ARTHUR_ID: '848996426918002731',
-    ROYAL_ROLE_ID: '1554207336967446608',
+    ROYAL_ROLE_ID: '1558453195976740975',
     SPECIAL_USER_ID: '1542941271205875812',
     // اختياري: آي دي روم الكتابة اللي يرسل فيه ترحيب دخول ارثر وإيدا (اتركه فاضي لتعطيله)
     WELCOME_TEXT_CHANNEL_ID: '',
@@ -342,7 +343,8 @@ client.on('interactionCreate', async (interaction) => {
                     '🎮 **ترفيه:** `/نكتة` `/نرد` `/عملة` `/اختار` `/حجر` `/تخمين` `/حب` `/كرة` `/سرعة` `/رياضيات` `/مبعثرة` `/اعلام` `/نقاطي` `/المتصدرين`\n' +
                     '📊 **عام:** `/حالة` `/بينج` `/فلوس` `/سيرفر`\n' +
                     '🛡️ **إدارة:** `/طرد` `/حظر` `/فك_حظر` `/ميوت` `/فك_ميوت` `/مسح` `/قفل` `/فتح` `/بطيء` `/رتبة_اضافة` `/رتبة_ازالة` `/لقب` `/صوت` `/نقل` `/اعلان` `/تحذير` `/تحذيرات` `/معلومات_عضو` `/معلومات_سيرفر`\n' +
-                    '💬 أو نادني بالكلام: **يا عبد نكتة** / **يا عبد سرعة** / **يا عبد نقاطي** / **يا عبد نرد 20**، أو ارد على رسالتي واكتب الأمر. أوامر الإدارة بالسلاش فقط.'
+                    '💬 أو نادني بالكلام: **يا عبد نكتة** / **يا عبد سرعة** / **يا عبد نقاطي** / **يا عبد نرد 20**، أو ارد على رسالتي واكتب الأمر.\\n' +
+                    '🛡️ وحتى أوامر الإدارة تقدر تناديها بالكلام: **يا عبد طرد @فلان يسب الناس** / **يا عبد ميوت @فلان 10 دقايق مزعج** / **يا عبد مسح 20** / **يا عبد باند @فلان**.'
                 );
         }
     } catch (err) {
@@ -408,6 +410,10 @@ client.on('messageCreate', async (message) => {
     const tier = getTier(message.author.id, message.member);
     const access = hasAccess(tier);
     const ctx = { getTier, CONFIG, pick };
+
+    // أوامر الإدارة بالكلام الطبيعي: يا عبد <مسح/طرد/حظر/ميوت/الخ> <منشن> <مدة> <سبب>
+    if (await nlcommands.handle(message, tier, ctx, admin)) return;
+
     const ntok = tokens.map(nz).filter(t => !['يا', 'عبد', 'العبد'].includes(t));
     const w = (...list) => ntok.some(t => list.includes(t));
     const deny = () => message.reply('❌ هذا الأمر خاص بمولاي ارثر والملكة إيدا وأصحاب الرتب بس! 💅');
