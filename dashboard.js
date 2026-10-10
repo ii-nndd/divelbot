@@ -2,6 +2,7 @@
 // تسجيل دخول بحساب ديسكورد، ويسمح فقط لآي دي ارثر وإيدا.
 // المتغيرات المطلوبة: DISCORD_CLIENT_ID و DISCORD_CLIENT_SECRET و SESSION_SECRET
 const crypto = require('crypto');
+const path = require('path');
 const { ChannelType, EmbedBuilder } = require('discord.js');
 const store = require('./store');
 const welcome = require('./welcome');
@@ -33,7 +34,7 @@ const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>لوحة دايڤل الملكية</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة دايڤل الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:'IBM Plex Sans Arabic',Tahoma,sans-serif;background:#0f0e14;color:#edebf2}
@@ -54,7 +55,7 @@ button.btn,button.b2,button.dn{border:0;border-radius:10px;padding:10px 16px;fon
 .cat{color:#d4af37;font-weight:600;margin:14px 0 4px}.sw{width:18px;height:18px;border-radius:50%;border:1px solid #444}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1f6f3f;padding:10px 18px;border-radius:10px;opacity:0;transition:.3s;pointer-events:none}
 #toast.err{background:#9b2020}#toast.on{opacity:1}a.btn{display:inline-block;text-decoration:none;padding:12px 20px;border-radius:10px}
-@media(max-width:800px){.app{flex-direction:column}.sb{width:auto;flex-direction:row;overflow-x:auto;padding:12px}.logo{display:none}.nav{white-space:nowrap}.main{padding:16px}}
+@media(max-width:800px){.app{flex-direction:column}.sb{position:fixed;bottom:0;left:0;right:0;z-index:5;width:auto;flex-direction:row;overflow-x:auto;padding:8px 8px calc(8px + env(safe-area-inset-bottom));border-left:0;border-top:1px solid #2a2836}.logo{display:none}.nav{white-space:nowrap;padding:10px 12px;font-size:14px}.main{padding:16px 14px calc(86px + env(safe-area-inset-bottom));padding-top:calc(16px + env(safe-area-inset-top))}}
 </style></head><body><div id="root"></div><div id="toast"></div>
 <script>
 var $=function(i){return document.getElementById(i)};
@@ -157,6 +158,7 @@ if(!d.enabled){r.appendChild(el('div',{class:'main'},[card('',el('div',{text:'ا
 if(!d.user){r.appendChild(el('div',{class:'main'},[el('h1',{text:'لوحة دايڤل الملكية'}),el('div',{class:'mut',text:'سجّل دخولك بحساب ديسكورد (ارثر وإيدا فقط)'}),el('p'),el('a',{class:'btn',href:'/auth/login',text:'تسجيل الدخول بديسكورد'})]));return}
 var sb=el('div',{class:'sb'},[el('div',{class:'logo',text:'دايڤل الملكية'})].concat(NAV.map(function(n){var b=el('button',{class:'nav',text:n[1],'data-p':n[0]});b.addEventListener('click',function(){show(n[0])});return b})).concat([el('a',{class:'nav',href:'/auth/logout',text:'خروج ('+d.user.name+')',style:'text-decoration:none'})]));
 r.appendChild(el('div',{class:'app'},[sb,el('div',{class:'main',id:'main'})]));show('overview')}).catch(function(e){document.body.textContent=e.message})}
+if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(function(){});
 boot();
 </script></body></html>`;
 
@@ -167,6 +169,23 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
     const redirectUri = BASE + '/auth/callback';
 
     app.get('/dashboard', (req, res) => res.type('html').send(PAGE));
+
+    // تثبيت اللوحة كتطبيق على الجوال (PWA)
+    app.get('/manifest.webmanifest', (req, res) => res.type('application/manifest+json').send(JSON.stringify({
+        name: 'لوحة دايڤل الملكية', short_name: 'DVIEL', lang: 'ar', dir: 'rtl',
+        start_url: '/dashboard', scope: '/', display: 'standalone', orientation: 'portrait',
+        background_color: '#0f0e14', theme_color: '#0f0e14',
+        icons: [
+            { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+            { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+            { src: '/icon-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+        ]
+    })));
+    app.get('/sw.js', (req, res) => res.type('application/javascript').set('Cache-Control', 'no-cache')
+        .send("self.addEventListener('install',function(){self.skipWaiting()});self.addEventListener('activate',function(e){e.waitUntil(self.clients.claim())});self.addEventListener('fetch',function(){});"));
+    for (const f of ['icon-192.png', 'icon-512.png', 'icon-maskable.png']) {
+        app.get('/' + f, (req, res) => res.sendFile(path.join(__dirname, f), (err) => { if (err) res.status(404).end(); }));
+    }
 
     app.get('/auth/login', (req, res) => {
         if (!enabled) return res.status(503).send('اللوحة غير مفعلة');
