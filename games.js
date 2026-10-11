@@ -74,7 +74,7 @@ async function play(i, ctx, g) {
     startCd.set(i.user.id, Date.now());
     active.add(ch.id);
     try {
-        await i.reply({ embeds: [new EmbedBuilder().setColor(0xd4af37).setTitle(g.title)
+        await i.reply({ embeds: [new EmbedBuilder().setColor(0xb3121e).setTitle(g.title)
             .setDescription(g.body).setFooter({ text: `عندك ${g.seconds} ثانية، أول جواب صح يفوز` })] });
         const t0 = Date.now();
         const got = await ch.awaitMessages({

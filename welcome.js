@@ -37,7 +37,7 @@ const fill = (t, v) => String(t)
 
 // يبني رسالة الترحيب (تُستخدم عند الدخول الحقيقي وعند زر الاختبار)
 function build(cfg, v) {
-    const e = new EmbedBuilder().setColor(0xd4af37)
+    const e = new EmbedBuilder().setColor(0xb3121e)
         .setTitle(fill(cfg.title, v).slice(0, 256))
         .setDescription(fill(cfg.message, v).slice(0, 4000))
         .setFooter({ text: `العضو رقم ${v.count}` }).setTimestamp();

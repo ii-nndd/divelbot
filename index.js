@@ -1,6 +1,6 @@
 require('dotenv').config();
 const {
-    Client, GatewayIntentBits, SlashCommandBuilder, MessageFlags
+    Client, GatewayIntentBits, SlashCommandBuilder, MessageFlags, EmbedBuilder
 } = require('discord.js');
 const {
     joinVoiceChannel, entersState, VoiceConnectionStatus
@@ -15,6 +15,9 @@ const admin = require('./admin');
 const nlcommands = require('./nlcommands');
 const points = require('./points');
 const games = require('./games');
+const economy = require('./economy');
+const giveaway = require('./giveaway');
+const selfroles = require('./selfroles');
 const mountPanel = require('./panel');
 
 // ====================================================================
@@ -169,10 +172,10 @@ const commands = [
     new SlashCommandBuilder().setName('تعال').setDescription('يدخل البوت الفويس (للملكيين فقط)'),
     new SlashCommandBuilder().setName('اطلع').setDescription('يطلع البوت من الفويس (للملكيين فقط)'),
     new SlashCommandBuilder().setName('حالة').setDescription('حالة البوت'),
-    new SlashCommandBuilder().setName('نكتة').setDescription('نكتة من دايڤل'),
+    new SlashCommandBuilder().setName('نكتة').setDescription('نكتة من نوفا'),
     new SlashCommandBuilder().setName('تنبيه').setDescription('تنبيه ملكي (للملكيين فقط)'),
     new SlashCommandBuilder().setName('فلوس').setDescription('اسأل عن راتبك'),
-    new SlashCommandBuilder().setName('سيرفر').setDescription('نبذة عن سيرفر دايڤل'),
+    new SlashCommandBuilder().setName('سيرفر').setDescription('نبذة عن سيرفر نوفا'),
     new SlashCommandBuilder().setName('شعر').setDescription('شعر ملكي (للملكيين فقط)'),
     new SlashCommandBuilder().setName('اكل').setDescription('اطلب أكل من العبد (للملكيين فقط)'),
     new SlashCommandBuilder().setName('بينج').setDescription('سرعة البوت'),
@@ -196,7 +199,7 @@ const commands = [
     new SlashCommandBuilder().setName('كرة').setDescription('كرة الحظ، اسأل سؤال')
         .addStringOption(o => o.setName('سؤال').setDescription('سؤالك').setRequired(true)),
     new SlashCommandBuilder().setName('مساعدة').setDescription('قائمة الأوامر')
-].map(c => c.toJSON()).concat(admin.commands, points.commands, games.commands, tickets.commands);
+].map(c => c.toJSON()).concat(admin.commands, points.commands, games.commands, tickets.commands, economy.commands, giveaway.commands, selfroles.commands);
 
 // ====================================================================
 // 7. تشغيل البوت
@@ -213,6 +216,7 @@ client.once('clientReady', async () => {
     await store.init();
     R.reload();
     points.init();
+    giveaway.reschedule(client);
     connectToVoice();
 });
 
@@ -227,12 +231,20 @@ const rpsNames = { rock: '🪨 حجر', paper: '📄 ورقة', scissors: '✂�
 const rpsBeats = { rock: 'scissors', paper: 'rock', scissors: 'paper' };
 
 client.on('interactionCreate', async (interaction) => {
-    if (interaction.isButton()) { await tickets.handleButton(interaction, { getTier, CONFIG, pick }); return; }
+    if (interaction.isButton()) {
+        if (await tickets.handleButton(interaction, { getTier, CONFIG, pick })) return;
+        if (await giveaway.handleButton(interaction)) return;
+        if (await selfroles.handleButton(interaction)) return;
+        return;
+    }
     if (!interaction.isChatInputCommand()) return;
     if (await tickets.handle(interaction, { getTier, CONFIG, pick })) return;
     if (await games.handle(interaction, { getTier, CONFIG, pick })) return;
     if (await points.handle(interaction, { getTier, CONFIG, pick })) return;
     if (await admin.handle(interaction, { getTier, CONFIG, pick })) return;
+    if (await economy.handle(interaction, { getTier, CONFIG, pick })) return;
+    if (await giveaway.handle(interaction, { getTier, CONFIG, pick })) return;
+    if (await selfroles.handle(interaction, { getTier, CONFIG, pick })) return;
 
     const tier = getTier(interaction.user.id, interaction.member);
     const name = interaction.commandName;
@@ -256,7 +268,9 @@ client.on('interactionCreate', async (interaction) => {
 
             case 'حالة': {
                 const inVoice = connection && connection.state.status === VoiceConnectionStatus.Ready;
-                return interaction.reply(`${rp('status.'+tier)}\n📡 الفويس: ${inVoice ? 'متصل ✅' : 'غير متصل ❌'}`);
+                const e = new EmbedBuilder().setColor(0xb3121e).setDescription(rp('status.' + tier))
+                    .addFields({ name: '📡 الفويس', value: inVoice ? 'متصل ✅' : 'غير متصل ❌', inline: true });
+                return interaction.reply({ embeds: [e] });
             }
 
             case 'نكتة':
@@ -269,12 +283,12 @@ client.on('interactionCreate', async (interaction) => {
             case 'فلوس':
                 return interaction.reply(
                     (tier === 'arthur' || tier === 'ida')
-                        ? '💰 يا فخامة المقام، خزينة دايڤل كلها تحت أمرك، تبي نحول لك مليار دولار الحين؟ 🪙👑'
-                        : '💸 راتبك في دايڤل هو كف محترم لو عدت تسأل أسئلة مالها داعي! 😂'
+                        ? '💰 يا فخامة المقام، خزينة نوفا كلها تحت أمرك، تبي نحول لك مليار دولار الحين؟ 🪙👑'
+                        : '💸 راتبك في نوفا هو كف محترم لو عدت تسأل أسئلة مالها داعي! 😂'
                 );
 
             case 'سيرفر':
-                return interaction.reply('🌟 سيرفر دايڤل أطخم وأفخم سيرفر بالديسكورد بفضل وجود مولاي ارثر والملكة إيدا على عرشه! 🔥👑');
+                return interaction.reply('🌟 سيرفر نوفا أطخم وأفخم سيرفر بالديسكورد بفضل وجود مولاي ارثر والملكة إيدا على عرشه! 🔥👑');
 
             case 'شعر':
                 if (!hasAccess(tier)) return denied();
@@ -336,16 +350,22 @@ client.on('interactionCreate', async (interaction) => {
             case 'كرة':
                 return interaction.reply(`🔮 سؤالك: ${interaction.options.getString('سؤال')}\nالجواب: **${pick(eightBall)}**`);
 
-            case 'مساعدة':
-                return interaction.reply(
-                    '**🛠️ أوامر البوت:**\n' +
-                    '👑 **ملكية:** `/تعال` `/اطلع` `/تنبيه` `/شعر` `/اكل`\n' +
-                    '🎮 **ترفيه:** `/نكتة` `/نرد` `/عملة` `/اختار` `/حجر` `/تخمين` `/حب` `/كرة` `/سرعة` `/رياضيات` `/مبعثرة` `/اعلام` `/نقاطي` `/المتصدرين`\n' +
-                    '📊 **عام:** `/حالة` `/بينج` `/فلوس` `/سيرفر`\n' +
-                    '🛡️ **إدارة:** `/طرد` `/حظر` `/فك_حظر` `/ميوت` `/فك_ميوت` `/مسح` `/قفل` `/فتح` `/بطيء` `/رتبة_اضافة` `/رتبة_ازالة` `/لقب` `/صوت` `/نقل` `/اعلان` `/تحذير` `/تحذيرات` `/معلومات_عضو` `/معلومات_سيرفر`\n' +
-                    '💬 أو نادني بالكلام: **يا عبد نكتة** / **يا عبد سرعة** / **يا عبد نقاطي** / **يا عبد نرد 20**، أو ارد على رسالتي واكتب الأمر.\\n' +
-                    '🛡️ وحتى أوامر الإدارة تقدر تناديها بالكلام: **يا عبد طرد @فلان يسب الناس** / **يا عبد ميوت @فلان 10 دقايق مزعج** / **يا عبد مسح 20** / **يا عبد باند @فلان**.'
-                );
+            case 'مساعدة': {
+                const helpEmbed = new EmbedBuilder()
+                    .setColor(0xb3121e)
+                    .setTitle('🛠️ أوامر العبد')
+                    .setThumbnail(interaction.client.user.displayAvatarURL())
+                    .addFields(
+                        { name: '👑 ملكية', value: '`/تعال` `/اطلع` `/تنبيه` `/شعر` `/اكل`' },
+                        { name: '🎮 ترفيه وألعاب', value: '`/نكتة` `/نرد` `/عملة` `/اختار` `/حجر` `/تخمين` `/حب` `/كرة` `/سرعة` `/رياضيات` `/مبعثرة` `/اعلام`' },
+                        { name: '💰 اقتصاد ونقاط', value: '`/نقاطي` `/المتصدرين` `/يومي` `/رصيد` `/تحويل` `/المتجر` `/شراء`' },
+                        { name: '🎉 فعاليات', value: '`/قرعة_بدء` `/قرعة_انهاء` `/رتب_لوحة`' },
+                        { name: '📊 عام', value: '`/حالة` `/بينج` `/فلوس` `/سيرفر`' },
+                        { name: '🛡️ إدارة', value: '`/طرد` `/حظر` `/فك_حظر` `/ميوت` `/فك_ميوت` `/مسح` `/قفل` `/فتح` `/بطيء` `/رتبة_اضافة` `/رتبة_ازالة` `/لقب` `/صوت` `/نقل` `/اعلان` `/تحذير` `/تحذيرات` `/معلومات_عضو` `/معلومات_سيرفر` `/متجر_اضافة` `/متجر_حذف`' },
+                        { name: '💬 بالكلام', value: 'نادني: **يا عبد نكتة** / **يا عبد سرعة** / **يا عبد نقاطي** / **يا عبد نرد 20**، أو رد على رسالتي.\n🛡️ وحتى الإدارة بالكلام: **يا عبد طرد @فلان يسب الناس** / **يا عبد ميوت @فلان 10 دقايق مزعج** / **يا عبد مسح 20** / **يا عبد باند @فلان**.' }
+                    );
+                return interaction.reply({ embeds: [helpEmbed] });
+            }
         }
     } catch (err) {
         console.error('❌ خطأ في الأمر:', name, err);
@@ -450,10 +470,10 @@ client.on('messageCreate', async (message) => {
     }
     if (w('فلوس', 'راتب')) {
         return message.reply((tier === 'arthur' || tier === 'ida')
-            ? '💰 يا فخامة المقام، خزينة دايڤل كلها تحت أمرك، تبي نحول لك مليار دولار الحين؟ 🪙👑'
-            : '💸 راتبك في دايڤل هو كف محترم لو عدت تسأل أسئلة مالها داعي! 😂');
+            ? '💰 يا فخامة المقام، خزينة نوفا كلها تحت أمرك، تبي نحول لك مليار دولار الحين؟ 🪙👑'
+            : '💸 راتبك في نوفا هو كف محترم لو عدت تسأل أسئلة مالها داعي! 😂');
     }
-    if (w('سيرفر')) return message.reply('🌟 سيرفر دايڤل أطخم وأفخم سيرفر بالديسكورد بفضل وجود مولاي ارثر والملكة إيدا على عرشه! 🔥👑');
+    if (w('سيرفر')) return message.reply('🌟 سيرفر نوفا أطخم وأفخم سيرفر بالديسكورد بفضل وجود مولاي ارثر والملكة إيدا على عرشه! 🔥👑');
     if (w('مساعده', 'اوامر')) return message.reply(rp('help'));
     for (const [word, name] of Object.entries(TEXT_GAMES)) {
         if (w(word)) return games.handle(asInteraction(message, name), ctx);

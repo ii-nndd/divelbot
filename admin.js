@@ -177,7 +177,7 @@ async function run(i, tier, ctx) {
         }
         case 'اعلان': {
             const ch = o.getChannel('الروم') || i.channel;
-            const embed = new EmbedBuilder().setColor(0xd4af37)
+            const embed = new EmbedBuilder().setColor(0xb3121e)
                 .setTitle(o.getString('العنوان') || '📢 إعلان ملكي')
                 .setDescription(o.getString('النص'))
                 .setFooter({ text: `بأمر ${i.user.username}` }).setTimestamp();
@@ -214,7 +214,7 @@ async function run(i, tier, ctx) {
             return i.reply({ embeds: [e] });
         }
         case 'معلومات_سيرفر': {
-            const e = new EmbedBuilder().setColor(0xd4af37).setTitle(g.name)
+            const e = new EmbedBuilder().setColor(0xb3121e).setTitle(g.name)
                 .setThumbnail(g.iconURL())
                 .addFields(
                     { name: 'الأعضاء', value: String(g.memberCount), inline: true },

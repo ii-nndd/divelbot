@@ -3,21 +3,21 @@
 const crypto = require('crypto');
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>لوحة دايڤل الملكية</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>لوحة نوفا الملكية</title>
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:system-ui,Tahoma,sans-serif;background:#0d0d12;color:#eee;padding:16px}
 .card{max-width:760px;margin:0 auto;background:#17171f;border:1px solid #2c2c3a;border-radius:16px;padding:18px}
-h1{margin:0 0 4px;font-size:22px;color:#d4af37}p.sub{margin:0 0 16px;color:#999;font-size:14px}
+h1{margin:0 0 4px;font-size:22px;color:#e0303f}p.sub{margin:0 0 16px;color:#999;font-size:14px}
 select,textarea,input[type=password]{width:100%;background:#0d0d12;color:#eee;border:1px solid #33334a;border-radius:10px;padding:12px;font:inherit;font-size:15px}
 textarea{min-height:300px;line-height:1.7;resize:vertical;margin-top:10px}
 .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 button,.btn{background:#8b0000;color:#fff;border:0;border-radius:10px;padding:11px 16px;font:inherit;cursor:pointer}
 button.sec,.btn{background:#2c2c3a}button:disabled{opacity:.5}
-#hint{color:#d4af37;font-size:13px;margin:8px 0 0;min-height:18px}
+#hint{color:#e0303f;font-size:13px;margin:8px 0 0;min-height:18px}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1f6f3f;padding:10px 18px;border-radius:10px;opacity:0;transition:.3s;pointer-events:none}
 #toast.err{background:#9b2020}#toast.on{opacity:1}
 </style></head><body><div class="card">
-<h1>👑 لوحة دايڤل الملكية</h1><p class="sub">عدّل ردود البوت: كل سطر = رد، والبوت يختار واحد عشوائي</p>
+<h1>👑 لوحة نوفا الملكية</h1><p class="sub">عدّل ردود البوت: كل سطر = رد، والبوت يختار واحد عشوائي</p>
 <div id="login"><input type="password" id="pw" placeholder="كلمة المرور"><div class="row"><button id="go">دخول</button></div></div>
 <div id="app" hidden>
 <select id="key"></select>

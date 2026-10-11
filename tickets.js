@@ -36,7 +36,7 @@ const btn = (id, label, style) => new ButtonBuilder().setCustomId(id).setLabel(l
 
 function panelMessage(cfg) {
     return {
-        embeds: [new EmbedBuilder().setColor(0xd4af37).setTitle(cfg.panelTitle).setDescription(cfg.panelText)],
+        embeds: [new EmbedBuilder().setColor(0xb3121e).setTitle(cfg.panelTitle).setDescription(cfg.panelText)],
         components: [new ActionRowBuilder().addComponents(btn('ticket_open', cfg.buttonLabel, ButtonStyle.Success))]
     };
 }
@@ -91,7 +91,7 @@ async function openTicket(i, CONFIG) {
     const staffPing = cfg.staffRoleId && g.roles.cache.has(cfg.staffRoleId) ? ` <@&${cfg.staffRoleId}>` : '';
     await ch.send({
         content: `<@${i.user.id}>${staffPing}`,
-        embeds: [new EmbedBuilder().setColor(0xd4af37).setTitle(`🎫 تذكرة #${String(num).padStart(4, '0')}`)
+        embeds: [new EmbedBuilder().setColor(0xb3121e).setTitle(`🎫 تذكرة #${String(num).padStart(4, '0')}`)
             .setDescription(cfg.welcomeText.replace(/\{user\}/g, `<@${i.user.id}>`))],
         components: [new ActionRowBuilder().addComponents(
             btn('ticket_claim', 'استلام التذكرة', ButtonStyle.Primary), btn('ticket_close', 'إغلاق التذكرة', ButtonStyle.Danger))],

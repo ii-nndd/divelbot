@@ -34,25 +34,25 @@ const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة دايڤل الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:'IBM Plex Sans Arabic',Tahoma,sans-serif;background:#0f0e14;color:#edebf2}
 .app{display:flex;min-height:100vh}.sb{width:230px;background:#14131b;border-left:1px solid #2a2836;padding:22px 14px;display:flex;flex-direction:column;gap:6px;flex-shrink:0}
-.logo{font-size:20px;font-weight:700;color:#d4af37;margin-bottom:18px}
+.logo{font-size:20px;font-weight:700;color:#e0303f;margin-bottom:18px}
 .nav{padding:12px 14px;border-radius:10px;color:#9a97a8;font-size:15px;cursor:pointer;border:0;background:none;text-align:right;font:inherit}
-.nav.on{background:#2a2410;color:#d4af37}.main{flex:1;padding:26px;max-width:960px}
+.nav.on{background:#2a1012;color:#e0303f}.main{flex:1;padding:26px;max-width:960px}
 .card{background:#181720;border:1px solid #2a2836;border-radius:14px;padding:18px;margin-bottom:16px}
 h1{margin:0 0 4px;font-size:25px}.mut{color:#9a97a8;font-size:14px}.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 input,select,textarea{background:#0f0e14;color:#edebf2;border:1px solid #33314a;border-radius:10px;padding:11px;font:inherit;min-height:44px}
 textarea{width:100%;min-height:130px}input[type=color]{padding:3px;width:48px}
 button.btn,button.b2,button.dn{border:0;border-radius:10px;padding:10px 16px;font:inherit;cursor:pointer;min-height:44px}
-.btn{background:#d4af37;color:#1a1500;font-weight:700}.b2{background:#22212c;color:#edebf2;border:1px solid #2a2836!important}
+.btn{background:#b3121e;color:#fff;font-weight:700}.b2{background:#22212c;color:#edebf2;border:1px solid #2a2836!important}
 .dn{background:#22212c;color:#ff8a8a;border:1px solid #6b2a2a!important}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}.big{font-size:30px;font-weight:700;color:#d4af37}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}.big{font-size:30px;font-weight:700;color:#e0303f}
 .item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #2a2836;flex-wrap:wrap}
 .item .nm{flex:1;min-width:120px}.tag{background:#22212c;border:1px solid #33314a;border-radius:20px;padding:2px 10px;font-size:12px;color:#c9c6d6}
-.cat{color:#d4af37;font-weight:600;margin:14px 0 4px}.sw{width:18px;height:18px;border-radius:50%;border:1px solid #444}
+.cat{color:#e0303f;font-weight:600;margin:14px 0 4px}.sw{width:18px;height:18px;border-radius:50%;border:1px solid #444}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1f6f3f;padding:10px 18px;border-radius:10px;opacity:0;transition:.3s;pointer-events:none}
 #toast.err{background:#9b2020}#toast.on{opacity:1}a.btn{display:inline-block;text-decoration:none;padding:12px 20px;border-radius:10px}
 @media(max-width:800px){.app{flex-direction:column}.sb{position:fixed;bottom:0;left:0;right:0;z-index:5;width:auto;flex-direction:row;overflow-x:auto;padding:8px 8px calc(8px + env(safe-area-inset-bottom));border-left:0;border-top:1px solid #2a2836}.logo{display:none}.nav{white-space:nowrap;padding:10px 12px;font-size:14px}.main{padding:16px 14px calc(86px + env(safe-area-inset-bottom));padding-top:calc(16px + env(safe-area-inset-top))}}
@@ -83,7 +83,7 @@ var box=el('div',{class:'card'});var none=d.channels.filter(function(c){return c
 if(none.length){box.appendChild(el('div',{class:'cat',text:'بدون قسم'}));none.forEach(function(c){box.appendChild(line(c))})}
 cats.forEach(function(g){box.appendChild(el('div',{class:'cat',text:'قسم'}));box.appendChild(line(g));d.channels.filter(function(c){return c.parentId===g.id}).forEach(function(c){box.appendChild(line(c))})});m.appendChild(box)})};
 pages.roles=function(m){return api('roles').then(function(d){
-m.appendChild(el('h1',{text:'الرتب'}));var name=el('input',{placeholder:'اسم الرتبة'}),col=el('input',{type:'color',value:'#d4af37'});
+m.appendChild(el('h1',{text:'الرتب'}));var name=el('input',{placeholder:'اسم الرتبة'}),col=el('input',{type:'color',value:'#b3121e'});
 m.appendChild(card('رتبة جديدة',row([name,col,el('button',{class:'btn',text:'إنشاء',on:{click:function(){go(api('roles/create',{name:name.value,color:col.value}),'تم الإنشاء ✅','roles')}}})])));
 var box=el('div',{class:'card'});d.roles.forEach(function(r){var k=[el('span',{class:'sw',style:'background:'+r.color}),el('span',{class:'nm',text:r.name})];
 if(r.editable){var c=el('input',{type:'color',value:r.color});c.addEventListener('change',function(){go(api('roles/edit',{id:r.id,color:c.value}),'تم تغيير اللون ✅','roles')});k.push(c);
@@ -155,8 +155,8 @@ m.appendChild(card('بحث',row([q,el('button',{class:'btn',text:'بحث',on:{cl
 m.appendChild(el('div',{class:'mut',text:'الآي دي يشتغل دايماً. البحث بالاسم يحتاج تفعيل MEMBERS_INTENT.',style:'margin-bottom:12px'}));m.appendChild(out);return Promise.resolve()};
 function boot(){api('me').then(function(d){var r=$('root');
 if(!d.enabled){r.appendChild(el('div',{class:'main'},[card('',el('div',{text:'اللوحة غير مفعلة: ناقص DISCORD_CLIENT_ID أو DISCORD_CLIENT_SECRET أو SESSION_SECRET في Render'}))]));return}
-if(!d.user){r.appendChild(el('div',{class:'main'},[el('h1',{text:'لوحة دايڤل الملكية'}),el('div',{class:'mut',text:'سجّل دخولك بحساب ديسكورد (ارثر وإيدا فقط)'}),el('p'),el('a',{class:'btn',href:'/auth/login',text:'تسجيل الدخول بديسكورد'})]));return}
-var sb=el('div',{class:'sb'},[el('div',{class:'logo',text:'دايڤل الملكية'})].concat(NAV.map(function(n){var b=el('button',{class:'nav',text:n[1],'data-p':n[0]});b.addEventListener('click',function(){show(n[0])});return b})).concat([el('a',{class:'nav',href:'/auth/logout',text:'خروج ('+d.user.name+')',style:'text-decoration:none'})]));
+if(!d.user){r.appendChild(el('div',{class:'main'},[el('h1',{text:'لوحة نوفا الملكية'}),el('div',{class:'mut',text:'سجّل دخولك بحساب ديسكورد (ارثر وإيدا فقط)'}),el('p'),el('a',{class:'btn',href:'/auth/login',text:'تسجيل الدخول بديسكورد'})]));return}
+var sb=el('div',{class:'sb'},[el('div',{class:'logo',text:'نوفا الملكية'})].concat(NAV.map(function(n){var b=el('button',{class:'nav',text:n[1],'data-p':n[0]});b.addEventListener('click',function(){show(n[0])});return b})).concat([el('a',{class:'nav',href:'/auth/logout',text:'خروج ('+d.user.name+')',style:'text-decoration:none'})]));
 r.appendChild(el('div',{class:'app'},[sb,el('div',{class:'main',id:'main'})]));show('overview')}).catch(function(e){document.body.textContent=e.message})}
 if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(function(){});
 boot();
@@ -172,7 +172,7 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
 
     // تثبيت اللوحة كتطبيق على الجوال (PWA)
     app.get('/manifest.webmanifest', (req, res) => res.type('application/manifest+json').send(JSON.stringify({
-        id: '/dashboard', name: 'لوحة دايڤل الملكية', short_name: 'DVIEL', lang: 'ar', dir: 'rtl', categories: ['utilities'],
+        id: '/dashboard', name: 'لوحة نوفا الملكية', short_name: 'NOVA', lang: 'ar', dir: 'rtl', categories: ['utilities'],
         start_url: '/dashboard', scope: '/', display: 'standalone', orientation: 'portrait',
         background_color: '#0f0e14', theme_color: '#0f0e14',
         icons: [
@@ -316,7 +316,7 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         const c = chan(g, b.channelId);
         if (!c.isTextBased() || c.isVoiceBased()) throw new Error('اختر روم نصي');
         const text = String(b.text || '').trim().slice(0, 1800); if (!text) throw new Error('النص فاضي');
-        await c.send({ embeds: [new EmbedBuilder().setColor(0xd4af37).setTitle(clean(b.title) || '📢 إعلان ملكي').setDescription(text).setFooter({ text: `بأمر ${req.user.name}` }).setTimestamp()] });
+        await c.send({ embeds: [new EmbedBuilder().setColor(0xb3121e).setTitle(clean(b.title) || '📢 إعلان ملكي').setDescription(text).setFooter({ text: `بأمر ${req.user.name}` }).setTimestamp()] });
         note(req, `إعلان في #${c.name}`);
     }));
 

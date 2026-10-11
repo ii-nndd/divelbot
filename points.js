@@ -83,7 +83,7 @@ async function handle(i, ctx) {
             const lvl = levelOf(doc.points), lo = needFor(lvl), hi = needFor(lvl + 1);
             const filled = Math.round(((doc.points - lo) / (hi - lo)) * 10);
             const rank = (await users.countDocuments({ guildId: g, points: { $gt: doc.points } })) + 1;
-            const e = new EmbedBuilder().setColor(0xd4af37).setTitle(u.username)
+            const e = new EmbedBuilder().setColor(0xb3121e).setTitle(u.username)
                 .setThumbnail(u.displayAvatarURL())
                 .addFields(
                     { name: 'النقاط', value: String(doc.points), inline: true },
@@ -96,7 +96,7 @@ async function handle(i, ctx) {
             const top = await users.find({ guildId: g, points: { $gt: 0 } }).sort({ points: -1 }).limit(10).toArray();
             const medals = ['🥇', '🥈', '🥉'];
             const lines = top.map((d, k) => `${medals[k] || `**${k + 1}.**`} <@${d.userId}> — ${d.points} (مستوى ${levelOf(d.points)})`);
-            const e = new EmbedBuilder().setColor(0xd4af37).setTitle('🏆 المتصدرين')
+            const e = new EmbedBuilder().setColor(0xb3121e).setTitle('🏆 المتصدرين')
                 .setDescription(lines.join('\n') || 'ما أحد عنده نقاط للحين!');
             await i.reply({ embeds: [e] });
         } else {
