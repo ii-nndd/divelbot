@@ -32,7 +32,15 @@ const CONFIG = {
     // اختياري: آي دي روم الكتابة اللي يرسل فيه ترحيب دخول ارثر وإيدا (اتركه فاضي لتعطيله)
     WELCOME_TEXT_CHANNEL_ID: '',
     // اختياري: آي دي روم يسجل فيه البوت كل أوامر الإدارة (اتركه فاضي لتعطيله)
-    LOG_CHANNEL_ID: ''
+    LOG_CHANNEL_ID: '',
+    // أعضاء لهم شخصية/ردود خاصة بالبوت (بدون صلاحيات إدارية، بس أسلوب كلام مختلف)
+    // الصيغة: 'آيدي العضو': 'اسم_الشخصية' — والردود تتحط بـ replies.base.js تحت greet.اسم_الشخصية الخ
+    PERSONAS: {
+        '1543980212537135148': 'rawan',  // روان - هوشة وتماسيك، أحياناً "عمتي" وأحياناً إنكار
+        '1550879705115398156': 'nabd'    // نبض ارثر / حبيبة ارثر - دلع وحنية خاصة
+    },
+    // رتبة "بدون احترام": اللي عندهم هالرتبة بس يرجع لهم أسلوب البوت الفظ القديم. الكل غيرهم (حتى بدون رتبة) يعامله البوت باحترام
+    DISRESPECT_ROLE_ID: '1559161253249949776'
 };
 
 // ====================================================================
@@ -71,9 +79,21 @@ function getTier(userId, member) {
     if (userId === CONFIG.ARTHUR_ID) return 'arthur';
     if (userId === CONFIG.SPECIAL_USER_ID) return 'ida';
     if (member && member.roles && member.roles.cache.has(CONFIG.ROYAL_ROLE_ID)) return 'royal';
-    return 'peasant';
+    if (member && member.roles && member.roles.cache.has(CONFIG.DISRESPECT_ROLE_ID)) return 'disrespect';
+    return 'peasant';   // الافتراضي (بدون رتبة) = يعامله البوت باحترام عادي
 }
-const hasAccess = (tier) => tier !== 'peasant';
+const hasAccess = (tier) => tier === 'arthur' || tier === 'ida' || tier === 'royal';
+
+// شخصية خاصة لعضو معين (بدون ما تأثر على صلاحياته)، ولو ما فيها رد لهالتصنيف يرجع لرد الرتبة العادي
+const getPersona = (userId) => CONFIG.PERSONAS[userId] || null;
+function rpFor(category, userId, tier) {
+    const persona = getPersona(userId);
+    if (persona) {
+        const arr = R.get(`${category}.${persona}`);
+        if (arr.length) return pick(arr);
+    }
+    return rp(`${category}.${tier}`);
+}
 
 // كولداون لكل مستخدم (ثواني)
 const cooldowns = new Map();
@@ -268,7 +288,7 @@ client.on('interactionCreate', async (interaction) => {
 
             case 'حالة': {
                 const inVoice = connection && connection.state.status === VoiceConnectionStatus.Ready;
-                const e = new EmbedBuilder().setColor(0xb3121e).setDescription(rp('status.' + tier))
+                const e = new EmbedBuilder().setColor(0xb3121e).setDescription(rpFor('status', interaction.user.id, tier))
                     .addFields({ name: '📡 الفويس', value: inVoice ? 'متصل ✅' : 'غير متصل ❌', inline: true });
                 return interaction.reply({ embeds: [e] });
             }
@@ -466,7 +486,7 @@ client.on('messageCreate', async (message) => {
     }
     if (w('حاله', 'status')) {
         const inVoice = connection && connection.state.status === VoiceConnectionStatus.Ready;
-        return message.reply(`${rp('status.' + tier)}\n📡 الفويس: ${inVoice ? 'متصل ✅' : 'غير متصل ❌'}`);
+        return message.reply(`${rpFor('status', message.author.id, tier)}\n📡 الفويس: ${inVoice ? 'متصل ✅' : 'غير متصل ❌'}`);
     }
     if (w('فلوس', 'راتب')) {
         return message.reply((tier === 'arthur' || tier === 'ida')
@@ -485,22 +505,23 @@ client.on('messageCreate', async (message) => {
     if (games.isActive(message.channel.id)) return;
 
     const has = (list) => tokens.some(t => list.includes(t));
+    const persona = getPersona(message.author.id);
 
     // ضرب
-    if (has(HIT_WORDS)) return message.reply(rp('hit.' + tier));
+    if (has(HIT_WORDS)) return message.reply(rpFor('hit', message.author.id, tier));
 
-    // العشوائي
-    if (!access) {
-        return message.reply(has(RUDE_WORDS) ? rp('rude') : rp('greet.peasant'));
+    // رتبة "بدون احترام" بس هي اللي ياخذ أسلوب البوت الفظ القديم (إلا لو عنده شخصية خاصة تطغى عليها)
+    if (tier === 'disrespect' && !persona) {
+        return message.reply(has(RUDE_WORDS) ? rp('rude') : rp('greet.disrespect'));
     }
 
-    if (has(FOOD_WORDS)) return message.reply(rp('food.' + tier));
-    if (has(THANKS_WORDS)) return message.reply(rp('thanks.' + tier));
-    if (has(WHERE_WORDS)) return message.reply(rp('where.' + tier));
-    if (has(MOVE_WORDS)) return message.reply(rp('move.' + tier));
+    if (has(FOOD_WORDS)) return message.reply(rpFor('food', message.author.id, tier));
+    if (has(THANKS_WORDS)) return message.reply(rpFor('thanks', message.author.id, tier));
+    if (has(WHERE_WORDS)) return message.reply(rpFor('where', message.author.id, tier));
+    if (has(MOVE_WORDS)) return message.reply(rpFor('move', message.author.id, tier));
     if (has(POEM_WORDS)) return message.reply(rp('poems'));
 
-    return message.reply(rp('greet.' + tier));
+    return message.reply(rpFor('greet', message.author.id, tier));
 });
 
 // ====================================================================

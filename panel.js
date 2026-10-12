@@ -23,12 +23,14 @@ button.sec,.btn{background:#2c2c3a}button:disabled{opacity:.5}
 <select id="key"></select>
 <div id="hint"></div>
 <textarea id="txt" spellcheck="false"></textarea>
-<div class="row"><button id="save">💾 حفظ</button><button class="sec" id="reset">↩️ الافتراضي</button></div>
+<div class="row"><button id="save">💾 حفظ</button><button class="sec" id="reset">↩️ الافتراضي / حذف</button></div>
 <div class="row"><button class="sec" id="exp">⬇️ نسخة احتياطية</button><label class="btn">⬆️ استيراد<input type="file" id="imp" accept=".json" hidden></label></div>
+<p class="sub" style="margin:18px 0 6px">➕ تصنيف جديد (مثال: greet.سارة أو custom.سارة)</p>
+<div class="row"><input type="text" id="newkey" placeholder="فئة.اسم" style="flex:1;background:#0d0d12;color:#eee;border:1px solid #33334a;border-radius:10px;padding:12px;font:inherit"><button id="addkey">➕ إنشاء</button></div>
 </div></div><div id="toast"></div>
 <script>
 var L={greet:'ترحيب',food:'أكل',hit:'ضرب',rude:'إهانة',thanks:'شكر',where:'وينك',move:'قوم/تحرك',status:'الحالة',help:'مساعدة',poems:'شعر',jokes:'نكت',alerts:'تنبيهات',welcome:'ترحيب الفويس',custom:'كلمات خاصة',games:'الألعاب'};
-var T={arthur:'ارثر',ida:'إيدا',royal:'الرتبة الملكية',peasant:'العشوائيين',all:'الكل',sentences:'جمل سرعة الكتابة',words:'كلمات المبعثرة',flags:'الأعلام'};
+var T={arthur:'ارثر',ida:'إيدا',royal:'الرتبة الملكية',peasant:'العشوائيين',all:'الكل',sentences:'جمل سرعة الكتابة',words:'كلمات المبعثرة',flags:'الأعلام',rawan:'روان',nabd:'نبض ارثر'};
 var $=function(i){return document.getElementById(i)},D={};
 function label(k){var p=k.split('.');return (L[p[0]]||p[0])+(p[1]?' ← '+(T[p[1]]||p[1]):'')}
 function toast(m,e){var t=$('toast');t.textContent=m;t.className=(e?'err ':'')+'on';setTimeout(function(){t.className=''},2200)}
@@ -44,7 +46,13 @@ function load(){return api('replies').then(function(j){D=j;var s=$('key'),cur=s.
 $('go').onclick=function(){sessionStorage.pw=$('pw').value;load().catch(function(e){toast(e.message,1)})};
 $('key').onchange=show;
 $('save').onclick=function(){api('replies',{key:$('key').value,lines:$('txt').value.split('\\n')}).then(load).then(function(){toast('تم الحفظ ✅')}).catch(function(e){toast(e.message,1)})};
-$('reset').onclick=function(){if(!confirm('رجوع للردود الافتراضية؟'))return;api('reset',{key:$('key').value}).then(load).then(function(){toast('تم الرجوع للافتراضي')}).catch(function(e){toast(e.message,1)})};
+$('reset').onclick=function(){if(!confirm('رجوع للردود الافتراضية؟ (لو هذا تصنيف أنشأته إنت، بينحذف كامل)'))return;api('reset',{key:$('key').value}).then(load).then(function(){toast('تم ✅')}).catch(function(e){toast(e.message,1)})};
+$('addkey').onclick=function(){
+  var k=($('newkey').value||'').trim();
+  if(!k)return toast('اكتب اسم التصنيف',1);
+  if(!/^[a-zA-Z_][a-zA-Z0-9_]*\.[\u0600-\u06FFa-zA-Z0-9_]{1,40}$/.test(k))return toast('الصيغة: فئة.اسم (حروف إنجليزية بس للفئة)',1);
+  api('replies',{key:k,lines:['اكتب ردك هنا']}).then(function(){$('newkey').value='';return load()}).then(function(){$('key').value=k;show();toast('تم إنشاء التصنيف، عدّل الرد واحفظ ✅')}).catch(function(e){toast(e.message,1)})
+};
 $('exp').onclick=function(){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(D.custom,null,2)],{type:'application/json'}));a.download='replies-backup.json';a.click()};
 $('imp').onchange=function(e){var f=e.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(){try{api('import',{map:JSON.parse(r.result)}).then(load).then(function(){toast('تم الاستيراد ✅')}).catch(function(x){toast(x.message,1)})}catch(x){toast('ملف غير صالح',1)}};r.readAsText(f)};
 if(sessionStorage.pw)load().catch(function(){});
