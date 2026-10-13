@@ -58,15 +58,19 @@ module.exports = {
     },
     all() {
         const out = {};
-        for (const k of Object.keys(defaults)) out[k] = this.get(k);
+        const keys = new Set([...Object.keys(defaults), ...Object.keys(overrides)]);
+        for (const k of keys) out[k] = this.get(k);
         return out;
     },
     overrides: () => overrides,
     reload() { overrides = store.read('replies.json', {}); },
+    // تصنيف موجود بالأساس: يتعدل عادي. تصنيف جديد (مو بالافتراضي): لازم اسمه بصيغة فئة.اسم ولازم رد وحد أقل
     set(key, lines) {
-        if (!(key in defaults)) return false;
+        const exists = key in defaults;
+        if (!exists && !/^[a-z_][a-z0-9_]*\.[\u0600-\u06FFa-z0-9_]{1,40}$/i.test(key)) return false;
         const clean = lines.map(s => String(s).trim().slice(0, 500)).filter(Boolean).slice(0, 200);
-        if (!clean.length && !isCustom(key)) delete overrides[key];
+        if (!exists && !clean.length) return false;
+        if (!clean.length && !isCustom(key) && exists) delete overrides[key];
         else overrides[key] = clean;
         store.write('replies.json', overrides);
         return true;

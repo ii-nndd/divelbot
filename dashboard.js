@@ -37,23 +37,45 @@ const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-*{box-sizing:border-box}body{margin:0;font-family:'IBM Plex Sans Arabic',Tahoma,sans-serif;background:#0f0e14;color:#edebf2}
-.app{display:flex;min-height:100vh}.sb{width:230px;background:#14131b;border-left:1px solid #2a2836;padding:22px 14px;display:flex;flex-direction:column;gap:6px;flex-shrink:0}
-.logo{font-size:20px;font-weight:700;color:#e0303f;margin-bottom:18px}
-.nav{padding:12px 14px;border-radius:10px;color:#9a97a8;font-size:15px;cursor:pointer;border:0;background:none;text-align:right;font:inherit}
-.nav.on{background:#2a1012;color:#e0303f}.main{flex:1;padding:26px;max-width:960px}
-.card{background:#181720;border:1px solid #2a2836;border-radius:14px;padding:18px;margin-bottom:16px}
+*{box-sizing:border-box}
+body{margin:0;font-family:'IBM Plex Sans Arabic',Tahoma,sans-serif;background:#0a090d;color:#edebf2;
+  background-image:
+    radial-gradient(1.5px 1.5px at 20px 30px,rgba(255,255,255,.55),transparent),
+    radial-gradient(1.5px 1.5px at 90px 80px,rgba(255,255,255,.4),transparent),
+    radial-gradient(1px 1px at 160px 40px,rgba(255,255,255,.5),transparent),
+    radial-gradient(1px 1px at 230px 120px,rgba(255,220,190,.45),transparent),
+    radial-gradient(1.5px 1.5px at 300px 20px,rgba(255,255,255,.35),transparent),
+    radial-gradient(1px 1px at 60px 160px,rgba(255,255,255,.4),transparent),
+    radial-gradient(1.5px 1.5px at 340px 180px,rgba(255,200,170,.4),transparent),
+    radial-gradient(900px 500px at 14% 8%,rgba(179,18,30,.16),transparent 60%),
+    radial-gradient(700px 420px at 92% 85%,rgba(179,18,30,.10),transparent 60%);
+  background-repeat:repeat,repeat,repeat,repeat,repeat,repeat,repeat,no-repeat,no-repeat;
+  background-size:380px 220px,380px 220px,380px 220px,380px 220px,380px 220px,380px 220px,380px 220px,auto,auto;
+  background-attachment:fixed}
+.app{display:flex;min-height:100vh}
+.sb{width:230px;background:rgba(20,19,27,.88);backdrop-filter:blur(6px);border-left:1px solid #2a2836;padding:22px 14px;display:flex;flex-direction:column;gap:6px;flex-shrink:0}
+.logo{display:flex;align-items:center;font-size:19px;font-weight:700;color:#f0566a;margin-bottom:18px;letter-spacing:.3px}
+.nav{padding:12px 14px;border-radius:10px;color:#9a97a8;font-size:15px;cursor:pointer;border:0;background:none;text-align:right;font:inherit;transition:background .15s,color .15s}
+.nav:hover{background:#1d1a22;color:#d8d5e2}
+.nav.on{background:linear-gradient(90deg,#2a1012,#1d0d10);color:#f0566a;box-shadow:inset 2px 0 0 #b3121e}.main{flex:1;padding:26px;max-width:960px}
+.card{background:linear-gradient(180deg,#181720,#151420);border:1px solid #2a2836;border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 6px 20px rgba(0,0,0,.25)}
 h1{margin:0 0 4px;font-size:25px}.mut{color:#9a97a8;font-size:14px}.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-input,select,textarea{background:#0f0e14;color:#edebf2;border:1px solid #33314a;border-radius:10px;padding:11px;font:inherit;min-height:44px}
+input,select,textarea{background:#0f0e14;color:#edebf2;border:1px solid #33314a;border-radius:10px;padding:11px;font:inherit;min-height:44px;transition:border-color .15s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#b3121e}
 textarea{width:100%;min-height:130px}input[type=color]{padding:3px;width:48px}
-button.btn,button.b2,button.dn{border:0;border-radius:10px;padding:10px 16px;font:inherit;cursor:pointer;min-height:44px}
-.btn{background:#b3121e;color:#fff;font-weight:700}.b2{background:#22212c;color:#edebf2;border:1px solid #2a2836!important}
+button.btn,button.b2,button.dn{border:0;border-radius:10px;padding:10px 16px;font:inherit;cursor:pointer;min-height:44px;transition:filter .15s,transform .1s}
+button.btn:hover,button.b2:hover,button.dn:hover{filter:brightness(1.12)}
+button.btn:active,button.b2:active,button.dn:active{transform:scale(.98)}
+.btn{background:linear-gradient(135deg,#d3192a,#8c0f1a);color:#fff;font-weight:700;box-shadow:0 3px 10px rgba(179,18,30,.35)}
+.b2{background:#22212c;color:#edebf2;border:1px solid #2a2836!important}
 .dn{background:#22212c;color:#ff8a8a;border:1px solid #6b2a2a!important}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}.big{font-size:30px;font-weight:700;color:#e0303f}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.stats .card{text-align:center}
+.big{font-size:30px;font-weight:700;background:linear-gradient(135deg,#ffb37a,#f0566a);-webkit-background-clip:text;background-clip:text;color:transparent}
 .item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #2a2836;flex-wrap:wrap}
 .item .nm{flex:1;min-width:120px}.tag{background:#22212c;border:1px solid #33314a;border-radius:20px;padding:2px 10px;font-size:12px;color:#c9c6d6}
-.cat{color:#e0303f;font-weight:600;margin:14px 0 4px}.sw{width:18px;height:18px;border-radius:50%;border:1px solid #444}
-#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1f6f3f;padding:10px 18px;border-radius:10px;opacity:0;transition:.3s;pointer-events:none}
+.cat{color:#f0566a;font-weight:600;margin:14px 0 4px}.sw{width:18px;height:18px;border-radius:50%;border:1px solid #444}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1f6f3f;padding:10px 18px;border-radius:10px;opacity:0;transition:.3s;pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.4)}
 #toast.err{background:#9b2020}#toast.on{opacity:1}a.btn{display:inline-block;text-decoration:none;padding:12px 20px;border-radius:10px}
 @media(max-width:800px){.app{flex-direction:column}.sb{position:fixed;bottom:0;left:0;right:0;z-index:5;width:auto;flex-direction:row;overflow-x:auto;padding:8px 8px calc(8px + env(safe-area-inset-bottom));border-left:0;border-top:1px solid #2a2836}.logo{display:none}.nav{white-space:nowrap;padding:10px 12px;font-size:14px}.main{padding:16px 14px calc(86px + env(safe-area-inset-bottom));padding-top:calc(16px + env(safe-area-inset-top))}}
 </style></head><body><div id="root"></div><div id="toast"></div>
@@ -66,8 +88,9 @@ function api(p,b){return fetch('/dashboard/api/'+p,{method:b?'POST':'GET',header
 function card(title,child){return el('div',{class:'card'},[title?el('div',{class:'cat',text:title}):null,child])}
 function row(k){return el('div',{class:'row'},k)}
 function go(fn,msg,page){fn.then(function(){toast(msg||'تم ✅');if(page)show(page)}).catch(function(e){toast(e.message,1)})}
+var NOVA_MARK_SVG='<svg width="22" height="22" viewBox="0 0 100 100" style="vertical-align:-5px;margin-left:8px"><defs><radialGradient id="ngc" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff6e8"/><stop offset="45%" stop-color="#ff8a3d"/><stop offset="100%" stop-color="#b3121e"/></radialGradient></defs><g fill="url(#ngc)"><polygon points="50,6 58,42 94,50 58,58 50,94 42,58 6,50 42,42"/><polygon points="50,24 54,42 50,50 46,42" opacity="0"/></g><circle cx="50" cy="50" r="13" fill="url(#ngc)"/></svg>';
 var pages={},cur='overview';
-var NAV=[['overview','نظرة عامة'],['channels','الرومات'],['roles','الرتب'],['members','الأعضاء'],['members','الأعضاء'],['welcome','الترحيب'],['tickets','التذاكر'],['announce','الإعلانات'],['log','السجل']];
+var NAV=[['overview','نظرة عامة'],['channels','الرومات'],['roles','الرتب'],['members','الأعضاء'],['welcome','الترحيب'],['tickets','التذاكر'],['announce','الإعلانات'],['log','السجل']];
 function show(p){cur=p;var m=$('main');m.innerHTML='';[].forEach.call(document.querySelectorAll('.nav'),function(n){n.className='nav'+(n.dataset.p===p?' on':'')});pages[p](m).catch(function(e){toast(e.message,1)})}
 pages.overview=function(m){return api('overview').then(function(d){m.appendChild(el('h1',{text:d.name}));m.appendChild(el('div',{class:'mut',text:'تحكم كامل بالسيرفر، والتعديل ينفذ فور الضغط'}));
 var s=el('div',{class:'stats'});[['الأعضاء',d.members],['الرومات',d.channels],['الرتب',d.roles]].forEach(function(x){s.appendChild(el('div',{class:'card'},[el('div',{class:'mut',text:x[0]}),el('div',{class:'big',text:String(x[1])})]))});m.appendChild(s)})};
@@ -156,7 +179,11 @@ m.appendChild(el('div',{class:'mut',text:'الآي دي يشتغل دايماً.
 function boot(){api('me').then(function(d){var r=$('root');
 if(!d.enabled){r.appendChild(el('div',{class:'main'},[card('',el('div',{text:'اللوحة غير مفعلة: ناقص DISCORD_CLIENT_ID أو DISCORD_CLIENT_SECRET أو SESSION_SECRET في Render'}))]));return}
 if(!d.user){r.appendChild(el('div',{class:'main'},[el('h1',{text:'لوحة نوفا الملكية'}),el('div',{class:'mut',text:'سجّل دخولك بحساب ديسكورد (ارثر وإيدا فقط)'}),el('p'),el('a',{class:'btn',href:'/auth/login',text:'تسجيل الدخول بديسكورد'})]));return}
-var sb=el('div',{class:'sb'},[el('div',{class:'logo',text:'نوفا الملكية'})].concat(NAV.map(function(n){var b=el('button',{class:'nav',text:n[1],'data-p':n[0]});b.addEventListener('click',function(){show(n[0])});return b})).concat([el('a',{class:'nav',href:'/auth/logout',text:'خروج ('+d.user.name+')',style:'text-decoration:none'})]));
+var logo=el('div',{class:'logo'});logo.innerHTML=NOVA_MARK_SVG+'<span>نوفا الملكية</span>';
+var sb=el('div',{class:'sb'},[logo].concat(NAV.map(function(n){var b=el('button',{class:'nav',text:n[1],'data-p':n[0]});b.addEventListener('click',function(){show(n[0])});return b})).concat([
+    el('a',{class:'nav',href:'/panel',target:'_blank',rel:'noopener',text:'الردود ↗',style:'text-decoration:none'}),
+    el('a',{class:'nav',href:'/auth/logout',text:'خروج ('+d.user.name+')',style:'text-decoration:none'})
+]));
 r.appendChild(el('div',{class:'app'},[sb,el('div',{class:'main',id:'main'})]));show('overview')}).catch(function(e){document.body.textContent=e.message})}
 if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(function(){});
 boot();
