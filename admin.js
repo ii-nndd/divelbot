@@ -2,6 +2,7 @@
 // owner = ارثر وإيدا فقط | royal = ارثر وإيدا + أصحاب الرتبة الملكية
 const { SlashCommandBuilder, EmbedBuilder, ChannelType, MessageFlags } = require('discord.js');
 const store = require('./store');
+const jail = require('./jail');
 
 const EPH = MessageFlags.Ephemeral;
 const cmd = (n, d) => new SlashCommandBuilder().setName(n).setDescription(d).setDMPermission(false);
@@ -46,7 +47,9 @@ const defs = [
         .addStringOption(o => o.setName('السبب').setDescription('السبب').setRequired(true).setMaxLength(200)), 'royal'],
     [cmd('تحذيرات', 'عرض تحذيرات عضو').addUserOption(member), 'royal'],
     [cmd('معلومات_عضو', 'معلومات عن عضو').addUserOption(o => o.setName('عضو').setDescription('العضو')), 'royal'],
-    [cmd('معلومات_سيرفر', 'معلومات عن السيرفر'), 'royal']
+    [cmd('معلومات_سيرفر', 'معلومات عن السيرفر'), 'royal'],
+    [cmd('سجن', 'سجن عضو (يشوف روم السجن بس، لازم تضبط النظام من /dashboard أول)').addUserOption(member).addStringOption(reasonOpt), 'royal'],
+    [cmd('فك_سجن', 'فك سجن عضو').addUserOption(member), 'royal']
 ];
 
 const commands = defs.map(([b]) => b.toJSON());
@@ -120,6 +123,20 @@ async function run(i, tier, ctx) {
             const t = await needTarget(); if (!t) return;
             await t.timeout(null, by);
             return done(i, ctx, `🔊 تم فك الكتم عن ${t}`);
+        }
+        case 'سجن': {
+            const t = await needTarget(); if (!t) return;
+            const cfg = jail.get(g.id);
+            if (!cfg.enabled || !cfg.roleId) return fail(i, 'نظام السجن مو مفعل، اضبطه من /dashboard (صفحة السجن) أول.');
+            await jail.jailMember(t, cfg, by);
+            return done(i, ctx, `⛓️ تم سجن ${t}\nالسبب: ${why}`);
+        }
+        case 'فك_سجن': {
+            const t = await needTarget(); if (!t) return;
+            const cfg = jail.get(g.id);
+            if (!cfg.roleId) return fail(i, 'نظام السجن مو مضبوط، اضبطه من /dashboard أول.');
+            await jail.unjailMember(t, cfg, by);
+            return done(i, ctx, `🔓 تم فك سجن ${t}`);
         }
         case 'مسح': {
             await i.deferReply({ flags: EPH });

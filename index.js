@@ -18,6 +18,7 @@ const games = require('./games');
 const economy = require('./economy');
 const giveaway = require('./giveaway');
 const selfroles = require('./selfroles');
+const jail = require('./jail');
 const mountPanel = require('./panel');
 
 // ====================================================================
@@ -237,6 +238,7 @@ client.once('clientReady', async () => {
     R.reload();
     points.init();
     giveaway.reschedule(client);
+    jail.init(client);
     connectToVoice();
 });
 
