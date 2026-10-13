@@ -1,6 +1,7 @@
 // نظام "روم السجن": رتبة وحدة تخفي كل الرومات عن صاحبها إلا روم سجن مخصص (شات + فويس).
-// المبدأ: نضيف الرتبة فوق رتب العضو العادية (لازم ترتيبها بالرتب أعلى من العضو العادي من ديسكورد نفسه)،
-// ونسوي Permission Overwrite يمنعها من رؤية كل روم إلا روم السجن. كل روم جديد ينسوى يتطبق عليه نفس المنع تلقائياً.
+// مهم: مجرد ما ترتب "رتبة السجن" فوق رتبة العضو العادي ما يكفي! لو عند العضو رتبة ثانية فيها سماح صريح
+// لرؤية روم معين (Allow overwrite)، ديسكورد يرجّح السماح على المنع بين الرتب المختلفة بغض النظر عن ترتيبها.
+// عشان كذا وقت السجن نسحب كل رتب العضو الثانية مؤقتاً (ونحفظها) ونخليه بس برتبة السجن، وقت الإفراج نرجعها له.
 const store = require('./store');
 
 const DEF = { enabled: false, roleId: '', textChannelId: '', voiceChannelId: '' };
@@ -51,13 +52,37 @@ function init(client) {
     });
 }
 
+const savedRolesAll = () => store.read('jailedroles.json', {});
+const saveRoles = (gid, uid, roleIds) => {
+    const a = savedRolesAll();
+    a[gid] = a[gid] || {};
+    a[gid][uid] = roleIds;
+    store.write('jailedroles.json', a);
+};
+const takeSavedRoles = (gid, uid) => {
+    const a = savedRolesAll();
+    const roles = (a[gid] && a[gid][uid]) || null;
+    if (a[gid]) { delete a[gid][uid]; store.write('jailedroles.json', a); }
+    return roles;
+};
+
 async function jailMember(member, cfg, reason) {
     if (!cfg.roleId) throw new Error('رتبة السجن مو محددة بعد، اضبطها من /dashboard أول.');
+    if (member.roles.cache.has(cfg.roleId)) throw new Error('العضو مسجون أصلاً.');
+    // نحفظ رتبه الحالية (غير @everyone والرتب المدارة تلقائياً زي رتبة البوست) عشان نرجعها له وقت الإفراج
+    const others = member.roles.cache.filter(r => r.id !== member.guild.id && !r.managed).map(r => r.id);
+    saveRoles(member.guild.id, member.id, others);
+    if (others.length) await member.roles.remove(others, reason || 'سجن');
     await member.roles.add(cfg.roleId, reason || 'سجن');
 }
 async function unjailMember(member, cfg, reason) {
     if (!cfg.roleId) throw new Error('رتبة السجن مو محددة بعد.');
+    const saved = takeSavedRoles(member.guild.id, member.id);
     await member.roles.remove(cfg.roleId, reason || 'فك سجن');
+    if (saved && saved.length) {
+        const valid = saved.filter(id => member.guild.roles.cache.has(id));
+        if (valid.length) await member.roles.add(valid, reason || 'فك سجن').catch(() => {});
+    }
 }
 
 module.exports = { get, set, syncChannel, syncAll, init, jailMember, unjailMember };

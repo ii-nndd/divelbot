@@ -160,7 +160,7 @@ m.appendChild(row([el('button',{class:'btn',text:'حفظ',on:{click:function(){g
 m.appendChild(card('إرسال لوحة التذاكر',row([pc,el('button',{class:'b2',text:'أرسل اللوحة',on:{click:function(){if(!pc.value)return toast('اختر الروم أول',1);api('tickets/save',body()).then(function(){return api('tickets/panel',{channelId:pc.value})}).then(function(){toast('انرسلت اللوحة ✅')}).catch(function(e){toast(e.message,1)})}}})])))})};
 pages.jail=function(m){return api('jail').then(function(d){var c=d.config;
 m.appendChild(el('h1',{text:'السجن'}));
-m.appendChild(el('div',{class:'mut',text:'رتبة وحدة تخفي كل الرومات عن صاحبها إلا روم السجن (شات وفويس). مهم: رتّب "رتبة السجن" بترتيب الرتب بديسكورد فوق رتبة العضو العادي، وتأكد رتبة البوت فوقها.'}));
+m.appendChild(el('div',{class:'mut',text:'رتبة وحدة تخفي كل الرومات عن صاحبها إلا روم السجن (شات وفويس). البوت يسحب رتب العضو الثانية وقت السجن ويرجعها وقت الإفراج تلقائياً، فقط تأكد رتبة البوت فوق رتبة السجن بترتيب الرتب عشان يقدر يضيفها ويشيلها.'}));
 function sel(first,list,val){var s=el('select',{},[opt('',first)].concat(list.map(function(x){return opt(x.id,x.name)})));s.value=val||'';return s}
 var en=el('input',{type:'checkbox'});en.checked=c.enabled;
 var rl=sel('اختر رتبة السجن',d.roles,c.roleId);
