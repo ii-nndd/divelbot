@@ -451,6 +451,7 @@ client.on('messageCreate', async (message) => {
 
     const tier = getTier(message.author.id, message.member);
     const access = hasAccess(tier);
+    const persona = getPersona(message.author.id);
     const ctx = { getTier, CONFIG, pick };
 
     // أوامر الإدارة بالكلام الطبيعي: يا عبد <مسح/طرد/حظر/ميوت/الخ> <منشن> <مدة> <سبب>
@@ -460,9 +461,10 @@ client.on('messageCreate', async (message) => {
     const w = (...list) => ntok.some(t => list.includes(t));
     const deny = () => message.reply('❌ هذا الأمر خاص بمولاي ارثر والملكة إيدا وأصحاب الرتب بس! 💅');
 
-    // الكلمات الخاصة (من اللوحة)
-    if (access) {
-        const matches = [...R.get('custom.' + tier), ...R.get('custom.all')]
+    // الكلمات الخاصة (من اللوحة) - حسب الرتبة، وحسب الشخصية الخاصة (روان/نبض ارثر) لو موجودة
+    if (access || persona) {
+        const personaWords = persona ? R.get('custom.' + persona) : [];
+        const matches = [...R.get('custom.' + tier), ...R.get('custom.all'), ...personaWords]
             .map(l => l.split('=>').map(x => x.trim()))
             .filter(([k, r]) => k && r && content.includes(k));
         if (matches.length) return message.reply(pick(matches)[1]);
@@ -507,7 +509,6 @@ client.on('messageCreate', async (message) => {
     if (games.isActive(message.channel.id)) return;
 
     const has = (list) => tokens.some(t => list.includes(t));
-    const persona = getPersona(message.author.id);
 
     // ضرب
     if (has(HIT_WORDS)) return message.reply(rpFor('hit', message.author.id, tier));
