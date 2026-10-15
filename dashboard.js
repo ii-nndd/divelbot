@@ -8,6 +8,7 @@ const store = require('./store');
 const welcome = require('./welcome');
 const tickets = require('./tickets');
 const jail = require('./jail');
+const points = require('./points');
 
 const BASE = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'https://divelbot.onrender.com';
 const SECRET = process.env.SESSION_SECRET;
@@ -182,8 +183,10 @@ r[0].members.forEach(function(x){out.appendChild(mcard(x,r[1].roles.filter(funct
 function mcard(x,roles){var c=el('div',{class:'card'});
 c.appendChild(el('div',{class:'row'},[el('img',{src:x.avatar,width:'44',height:'44',style:'border-radius:50%'}),el('div',{},[el('div',{text:x.name+(x.bot?' (بوت)':'')}),el('div',{class:'mut',text:x.user+' • '+x.id})])]));
 var rl=el('div',{class:'row',style:'margin:10px 0'});x.roles.forEach(function(r){rl.appendChild(el('span',{class:'tag',text:r.name}))});if(x.timedOut)rl.appendChild(el('span',{class:'tag',text:'مكتوم'}));c.appendChild(rl);
-if(x.owner){c.appendChild(el('div',{class:'mut',text:'محمي 👑'}));return c}
 function act(a,ex,msg,gone){api('members/action',Object.assign({id:x.id,action:a},ex||{})).then(function(){toast(msg||'تم ✅');if(gone)out.innerHTML='';else find(x.id)}).catch(function(e){toast(e.message,1)})}
+var pamt=el('input',{type:'number',value:'50',style:'width:100px'});
+c.appendChild(row([pamt,el('button',{class:'b2',text:'نقاط لعبة +/-',on:{click:function(){api('members/points',{id:x.id,amount:Number(pamt.value)}).then(function(r){toast('تم ✅ المجموع الآن '+r.points)}).catch(function(e){toast(e.message,1)})}}})]));
+if(x.owner){c.appendChild(el('div',{class:'mut',text:'محمي 👑 (ما عدا نقاط اللعبة فوق)'}));return c}
 var mins=el('input',{type:'number',value:'10',min:'1',style:'width:90px'}),nick=el('input',{placeholder:'اللقب الجديد'}),rs=el('select',{},roles.map(function(r){return opt(r.id,r.name)}));
 c.appendChild(row([mins,el('button',{class:'b2',text:'كتم بالدقائق',on:{click:function(){act('timeout',{minutes:Number(mins.value)},'تم الكتم ✅')}}}),el('button',{class:'b2',text:'فك الكتم',on:{click:function(){act('untimeout',{},'تم فك الكتم ✅')}}})]));
 c.appendChild(el('p'));c.appendChild(row([nick,el('button',{class:'b2',text:'تغيير اللقب',on:{click:function(){act('nick',{nick:nick.value})}}})]));
@@ -410,6 +413,17 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
             }
             default: no('إجراء غير معروف');
         }
+    }));
+
+    // تعديل نقاط لعبة أي عضو (حتى ارثر وإيدا نفسهم) — مقصود إنه ما يسجل كأمر ظاهر بديسكورد، بس من هنا
+    api.post('/members/points', h(async (g, b, req) => {
+        const m = await getMember(g, b.id);
+        const amount = Number(b.amount);
+        if (!Number.isInteger(amount) || amount === 0 || Math.abs(amount) > 1_000_000) throw new Error('رقم غير صالح');
+        const doc = await points.add(g.id, m.id, amount);
+        if (!doc) throw new Error('نظام النقاط غير متصل (قاعدة البيانات)');
+        note(req, `${amount >= 0 ? '+' : ''}${amount} نقطة لعبة لـ ${m.user.username} (المجموع ${doc.points})`);
+        return { points: doc.points };
     }));
 
     const target = async (g, id) => {
