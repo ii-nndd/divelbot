@@ -1,7 +1,8 @@
 // الألعاب: سرعة الكتابة، رياضيات، كلمة مبعثرة، أعلام. كل فوز يعطي نقاط.
-const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder, MessageFlags } = require('discord.js');
 const points = require('./points');
 const R = require('./replies');
+const cards = require('./cards');
 
 const EPH = MessageFlags.Ephemeral;
 const active = new Set();      // رومات فيها لعبة شغالة
@@ -29,6 +30,7 @@ const games = {
         const s = pick(sentences());
         return {
             title: '⌨️ سرعة الكتابة', body: `اكتب الجملة بأسرع ما تقدر:\n\n## ${s}`, seconds: 30, answer: s,
+            cardMain: s, cardSmall: 'اكتب الجملة بأسرع ما تقدر',
             check: (t) => norm(t) === norm(s), pts: (sec) => Math.max(5, Math.round(20 - sec))
         };
     },
@@ -40,6 +42,7 @@ const games = {
         const ans = op === '+' ? a + b : op === '-' ? a - b : a * b;
         return {
             title: '🧮 رياضيات سريعة', body: `كم ناتج:\n\n## ${a} ${op} ${b}`, seconds: 15, answer: ans,
+            cardMain: `${a} ${op} ${b}`, cardSmall: 'كم الناتج؟',
             check: (t) => digits(t) === String(ans), pts: (sec) => (sec < 5 ? 15 : 10)
         };
     },
@@ -49,6 +52,7 @@ const games = {
         while (sc === w) sc = [...w].sort(() => Math.random() - 0.5).join('');
         return {
             title: '🔤 الكلمة المبعثرة', body: `رتّب الحروف وكوّن الكلمة:\n\n## ${[...sc].join('  ')}`, seconds: 20, answer: w,
+            cardMain: [...sc].join('  '), cardSmall: 'رتّب الحروف وكوّن الكلمة',
             check: (t) => norm(t) === norm(w), pts: () => 10
         };
     },
@@ -74,8 +78,19 @@ async function play(i, ctx, g) {
     startCd.set(i.user.id, Date.now());
     active.add(ch.id);
     try {
-        await i.reply({ embeds: [new EmbedBuilder().setColor(0xb3121e).setTitle(g.title)
-            .setDescription(g.body).setFooter({ text: `عندك ${g.seconds} ثانية، أول جواب صح يفوز` })] });
+        let promptSent = false;
+        if (g.cardMain && cards.available()) {
+            try {
+                const png = await cards.gamePromptCard({ title: g.title, mainText: g.cardMain, small: g.cardSmall, seconds: g.seconds });
+                await i.reply({ files: [new AttachmentBuilder(png, { name: 'game.png' })] });
+                promptSent = true;
+            } catch (err) { console.error('❌ فشل رسم بطاقة السؤال:', err.message); }
+        }
+        if (!promptSent) {
+            await i.reply({ embeds: [new EmbedBuilder().setColor(0xb3121e).setTitle(g.title)
+                .setDescription(g.body).setFooter({ text: `عندك ${g.seconds} ثانية، أول جواب صح يفوز` })] });
+        }
+
         const t0 = Date.now();
         const got = await ch.awaitMessages({
             filter: (m) => !m.author.bot && g.check(m.content), max: 1, time: g.seconds * 1000
@@ -83,14 +98,27 @@ async function play(i, ctx, g) {
         if (!got.size) return ch.send(`⌛ انتهى الوقت! الجواب: **${g.answer}**`);
 
         const m = got.first(), sec = (Date.now() - t0) / 1000, pts = g.pts(sec);
+        const doc = await points.add(m.guild.id, m.author.id, pts).catch(() => null);
+        const leveledUp = doc ? points.levelOf(doc.points) > points.levelOf(doc.points - pts) : false;
+
+        if (cards.available()) {
+            try {
+                const png = await cards.gameWinCard({
+                    avatarURL: m.author.displayAvatarURL({ extension: 'png', size: 128 }),
+                    username: m.author.username, gameTitle: g.title, seconds: sec, points: pts,
+                    totalPoints: doc ? doc.points : null, leveledUp, level: doc ? points.levelOf(doc.points) : 0
+                });
+                await m.reply({ files: [new AttachmentBuilder(png, { name: 'win.png' })] });
+                return;
+            } catch (err) { console.error('❌ فشل رسم بطاقة الفوز:', err.message); }
+        }
+
         const tier = ctx.getTier(m.author.id, m.member);
         const icon = tier === 'arthur' ? '👑' : tier === 'ida' ? '🌸' : '🏆';
         let extra = '';
-        const doc = await points.add(m.guild.id, m.author.id, pts).catch(() => null);
         if (doc) {
             extra = ` (+${pts} نقطة، المجموع ${doc.points})`;
-            const lv = points.levelOf(doc.points);
-            if (lv > points.levelOf(doc.points - pts)) extra += `\n🎉 مبروك وصلت **المستوى ${lv}**!`;
+            if (leveledUp) extra += `\n🎉 مبروك وصلت **المستوى ${points.levelOf(doc.points)}**!`;
         }
         await m.reply(`${icon} فاز ${m.author} خلال **${sec.toFixed(1)}** ثانية!${extra}`);
     } catch (err) {

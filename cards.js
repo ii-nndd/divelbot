@@ -152,4 +152,90 @@ async function leaderboardCard(entries) {
     return canvas.encode('png');
 }
 
-module.exports = { available, rankCard, leaderboardCard };
+// يلف نص طويل على أكثر من سطر ويرسمه بمنتصف نقطة معينة
+function wrapCenteredText(ctx, text, cx, cy, maxWidth, lineHeight) {
+    const words = String(text).split(' ');
+    const lines = [];
+    let cur = '';
+    for (const w of words) {
+        const test = cur ? cur + ' ' + w : w;
+        if (cur && ctx.measureText(test).width > maxWidth) { lines.push(cur); cur = w; }
+        else cur = test;
+    }
+    if (cur) lines.push(cur);
+    const startY = cy - (lines.length - 1) * lineHeight / 2;
+    lines.forEach((l, i) => ctx.fillText(l, cx, startY + i * lineHeight));
+    return lines.length;
+}
+
+// بطاقة سؤال/تحدي اللعبة (سرعة الكتابة، الرياضيات، الكلمة المبعثرة)
+async function gamePromptCard({ title, mainText, small, seconds }) {
+    ensureFont();
+    const W = 820, H = 300;
+    const canvas = canvasLib.createCanvas(W, H);
+    const ctx = canvas.getContext('2d');
+    roundRect(ctx, 0, 0, W, H, 24); ctx.clip();
+    background(ctx, W, H, W * 0.5);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = GOLD;
+    ctx.font = '600 32px ' + FONT_FAMILY;
+    ctx.fillText(title, W / 2, 56);
+
+    ctx.fillStyle = '#ffffff';
+    const len = String(mainText).length;
+    const size = len > 28 ? 40 : len > 16 ? 54 : 70;
+    ctx.font = '600 ' + size + 'px ' + FONT_FAMILY;
+    wrapCenteredText(ctx, mainText, W / 2, H / 2 + 14, W - 90, size * 1.15);
+
+    ctx.font = '26px ' + FONT_FAMILY;
+    ctx.fillStyle = ORANGE;
+    ctx.fillText(small, W / 2, H - 56);
+
+    ctx.font = '22px ' + FONT_FAMILY;
+    ctx.fillStyle = '#9a97a8';
+    ctx.fillText(`عندك ${seconds} ثانية، أول جواب صح يفوز`, W / 2, H - 24);
+
+    return canvas.encode('png');
+}
+
+// بطاقة إعلان الفوز بلعبة (تشتغل لكل الألعاب الأربعة)
+async function gameWinCard({ avatarURL, username, gameTitle, seconds, points, totalPoints, leveledUp, level }) {
+    ensureFont();
+    const W = 820, H = 260;
+    const canvas = canvasLib.createCanvas(W, H);
+    const ctx = canvas.getContext('2d');
+    roundRect(ctx, 0, 0, W, H, 24); ctx.clip();
+    const AR = 80, AX = 56 + AR, AY = H / 2;
+    background(ctx, W, H, AX);
+    await drawAvatar(ctx, avatarURL, AX, AY, AR);
+
+    const rightEdge = W - 46;
+    ctx.textAlign = 'right';
+    ctx.fillStyle = GOLD;
+    ctx.font = '26px ' + FONT_FAMILY;
+    ctx.fillText(gameTitle, rightEdge, 60);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '600 42px ' + FONT_FAMILY;
+    ctx.fillText('🏆 فاز ' + username, rightEdge, 112);
+
+    ctx.font = '28px ' + FONT_FAMILY;
+    ctx.fillStyle = '#d8d5e2';
+    ctx.fillText(`خلال ${Number(seconds).toFixed(1)} ثانية`, rightEdge, 152);
+
+    if (totalPoints != null) {
+        ctx.font = '600 30px ' + FONT_FAMILY;
+        ctx.fillStyle = ORANGE;
+        ctx.fillText(`+${points} نقطة  •  المجموع ${totalPoints}`, rightEdge, 192);
+    }
+    if (leveledUp) {
+        ctx.font = '26px ' + FONT_FAMILY;
+        ctx.fillStyle = GOLD;
+        ctx.fillText(`🎉 وصل المستوى ${level}!`, rightEdge, totalPoints != null ? 228 : 192);
+    }
+
+    return canvas.encode('png');
+}
+
+module.exports = { available, rankCard, leaderboardCard, gamePromptCard, gameWinCard };
