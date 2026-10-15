@@ -1,7 +1,8 @@
 // نظام النقاط والمستويات (MongoDB). كل سيرفر له نقاطه المستقلة.
 // بدون MONGODB_URI يبقى البوت شغال والنقاط معطلة فقط.
-const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder, MessageFlags } = require('discord.js');
 const { MongoClient } = require('mongodb');
+const cards = require('./cards');
 
 let users = null;
 const chatCd = new Map();
@@ -81,8 +82,17 @@ async function handle(i, ctx) {
             const u = i.options.getUser('عضو') || i.user;
             const doc = (await users.findOne({ guildId: g, userId: u.id })) || { points: 0 };
             const lvl = levelOf(doc.points), lo = needFor(lvl), hi = needFor(lvl + 1);
-            const filled = Math.round(((doc.points - lo) / (hi - lo)) * 10);
             const rank = (await users.countDocuments({ guildId: g, points: { $gt: doc.points } })) + 1;
+            if (cards.available()) {
+                try {
+                    const png = await cards.rankCard({
+                        avatarURL: u.displayAvatarURL({ extension: 'png', size: 128 }),
+                        username: u.username, points: doc.points, level: lvl, lo, hi, rank
+                    });
+                    return i.reply({ files: [new AttachmentBuilder(png, { name: 'rank.png' })] });
+                } catch (err) { console.error('❌ فشل رسم بطاقة النقاط:', err.message); }
+            }
+            const filled = Math.round(((doc.points - lo) / (hi - lo)) * 10);
             const e = new EmbedBuilder().setColor(0xb3121e).setTitle(u.username)
                 .setThumbnail(u.displayAvatarURL())
                 .addFields(
@@ -94,11 +104,28 @@ async function handle(i, ctx) {
             await i.reply({ embeds: [e] });
         } else if (i.commandName === 'المتصدرين') {
             const top = await users.find({ guildId: g, points: { $gt: 0 } }).sort({ points: -1 }).limit(10).toArray();
+            if (!top.length) { await i.reply('ما أحد عنده نقاط للحين!'); return true; }
+            if (cards.available()) {
+                try {
+                    await i.deferReply();
+                    const entries = [];
+                    for (const d of top) {
+                        const user = await i.client.users.fetch(d.userId).catch(() => null);
+                        entries.push({
+                            name: user ? user.username : d.userId,
+                            avatarURL: user ? user.displayAvatarURL({ extension: 'png', size: 64 }) : null,
+                            points: d.points
+                        });
+                    }
+                    const png = await cards.leaderboardCard(entries);
+                    return i.editReply({ files: [new AttachmentBuilder(png, { name: 'leaderboard.png' })] });
+                } catch (err) { console.error('❌ فشل رسم بطاقة المتصدرين:', err.message); }
+            }
             const medals = ['🥇', '🥈', '🥉'];
             const lines = top.map((d, k) => `${medals[k] || `**${k + 1}.**`} <@${d.userId}> — ${d.points} (مستوى ${levelOf(d.points)})`);
             const e = new EmbedBuilder().setColor(0xb3121e).setTitle('🏆 المتصدرين')
-                .setDescription(lines.join('\n') || 'ما أحد عنده نقاط للحين!');
-            await i.reply({ embeds: [e] });
+                .setDescription(lines.join('\n'));
+            await (i.deferred ? i.editReply({ embeds: [e] }) : i.reply({ embeds: [e] }));
         } else {
             const tier = ctx.getTier(i.user.id, i.member);
             if (tier !== 'arthur' && tier !== 'ida') {
@@ -111,7 +138,9 @@ async function handle(i, ctx) {
         }
     } catch (err) {
         console.error('❌ خطأ نقاط:', err.message);
-        if (!i.replied && !i.deferred) i.reply({ content: '⚠️ صار خطأ بقاعدة البيانات.', flags: EPH }).catch(() => {});
+        const msg = { content: '⚠️ صار خطأ بقاعدة البيانات.', flags: EPH };
+        if (i.deferred && !i.replied) i.editReply(msg).catch(() => {});
+        else if (!i.replied) i.reply(msg).catch(() => {});
     }
     return true;
 }
