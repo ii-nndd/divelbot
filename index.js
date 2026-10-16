@@ -259,6 +259,7 @@ const commands = [
         .addUserOption(o => o.setName('الثاني').setDescription('الشخص الثاني (الافتراضي أنت)')),
     new SlashCommandBuilder().setName('كرة').setDescription('كرة الحظ، اسأل سؤال')
         .addStringOption(o => o.setName('سؤال').setDescription('سؤالك').setRequired(true)),
+    new SlashCommandBuilder().setName('ألوان').setDescription('يعيد توليد صورة الألوان ويحدّث بانل الألوان (للملكيين فقط)'),
     new SlashCommandBuilder().setName('مساعدة').setDescription('قائمة الأوامر')
 ].map(c => c.toJSON()).concat(admin.commands, points.commands, levels.commands, games.commands, tickets.commands, economy.commands, giveaway.commands, selfroles.commands);
 
@@ -438,19 +439,34 @@ client.on('interactionCreate', async (interaction) => {
             case 'كرة':
                 return interaction.reply(`🔮 سؤالك: ${interaction.options.getString('سؤال')}\nالجواب: **${pick(eightBall)}**`);
 
+            case 'ألوان': {
+                if (!hasAccess(tier)) return denied();
+                if (!interaction.guild) return interaction.reply({ content: '⚠️ هذا الأمر داخل السيرفر فقط.', flags: MessageFlags.Ephemeral });
+                await interaction.deferReply();
+                try {
+                    const cfg = colors.get(interaction.guild.id);
+                    const r = await colors.sendPanel(interaction.guild, interaction.guild.id);
+                    let files;
+                    try { files = [{ attachment: await colors.renderImage(cfg), name: 'nova-colors.png' }]; } catch { files = undefined; }
+                    return interaction.editReply({ content: `🎨 تم توليد صورة الألوان وتحديث البانل في <#${r.channelId}> ✅`, files });
+                } catch (e) {
+                    return interaction.editReply('⚠️ ' + (e.message || 'تعذر تحديث بانل الألوان'));
+                }
+            }
+
             case 'مساعدة': {
                 const helpEmbed = new EmbedBuilder()
                     .setColor(0xb3121e)
                     .setTitle('🛠️ أوامر العبد')
                     .setThumbnail(interaction.client.user.displayAvatarURL())
                     .addFields(
-                        { name: '👑 ملكية', value: '`/تعال` `/اطلع` `/تنبيه` `/شعر` `/اكل`' },
+                        { name: '👑 ملكية', value: '`/تعال` `/اطلع` `/تنبيه` `/شعر` `/اكل` `/ألوان`' },
                         { name: '🎮 ترفيه وألعاب', value: '`/نكتة` `/نرد` `/عملة` `/اختار` `/حجر` `/تخمين` `/حب` `/كرة` `/سرعة` `/رياضيات` `/مبعثرة` `/اعلام`' },
                         { name: '💰 اقتصاد ونقاط', value: '`/نقاطي` `/رتبة` `/rank` `/المتصدرين` `/يومي` `/رصيد` `/تحويل` `/المتجر` `/شراء`' },
                         { name: '🎉 فعاليات', value: '`/قرعة_بدء` `/قرعة_انهاء` `/رتب_لوحة`' },
                         { name: '📊 عام', value: '`/حالة` `/بينج` `/فلوس` `/سيرفر`' },
                         { name: '🛡️ إدارة', value: '`/طرد` `/حظر` `/فك_حظر` `/ميوت` `/فك_ميوت` `/مسح` `/قفل` `/فتح` `/بطيء` `/رتبة_اضافة` `/رتبة_ازالة` `/لقب` `/صوت` `/نقل` `/اعلان` `/تحذير` `/تحذيرات` `/معلومات_عضو` `/معلومات_سيرفر` `/متجر_اضافة` `/متجر_حذف`' },
-                        { name: '💬 بالكلام', value: 'نادني: **يا عبد نكتة** / **يا عبد سرعة** / **يا عبد رتبتي** / **يا عبد نرد 20**، أو رد على رسالتي. وأمر سريع: **!rank** أو **!رتبة**.\n🛡️ وحتى الإدارة بالكلام: **يا عبد طرد @فلان يسب الناس** / **يا عبد ميوت @فلان 10 دقايق مزعج** / **يا عبد مسح 20** / **يا عبد باند @فلان**.\n🎛️ والتحكم بالبوت: **يا عبد فك البوت** (يفك نفسه من الروم) / **يا عبد شغل البوت** (يرجع للتفاعل).' }
+                        { name: '💬 بالكلام', value: 'نادني: **يا عبد نكتة** / **يا عبد سرعة** / **يا عبد رتبتي** / **يا عبد نرد 20** / **يا عبد الألوان** (يولّد صورة الألوان ويحدّث البانل)، أو رد على رسالتي. وأمر سريع: **!rank** أو **!رتبة**.\n🛡️ وحتى الإدارة بالكلام: **يا عبد طرد @فلان يسب الناس** / **يا عبد ميوت @فلان 10 دقايق مزعج** / **يا عبد مسح 20** / **يا عبد باند @فلان**.\n🎛️ والتحكم بالبوت: **يا عبد فك البوت** (يفك نفسه من الروم) / **يا عبد شغل البوت** (يرجع للتفاعل).' }
                     );
                 return interaction.reply({ embeds: [helpEmbed] });
             }
@@ -582,6 +598,20 @@ client.on('messageCreate', async (message) => {
             .map(l => l.split('=>').map(x => x.trim()))
             .filter(([k, r]) => k && r && content.includes(k));
         if (matches.length) return message.reply(pick(matches)[1]);
+    }
+
+    // «يا عبد الألوان» / «يا عبد حدّث الألوان» / «يا عبد صورة الألوان» → يعيد توليد صورة الألوان ويحدّث البانل
+    if (w('الوان', 'الالوان')) {
+        if (!access) return deny();
+        try {
+            const cfg = colors.get(message.guild.id);
+            const r = await colors.sendPanel(message.guild, message.guild.id);
+            let files;
+            try { files = [{ attachment: await colors.renderImage(cfg), name: 'nova-colors.png' }]; } catch { files = undefined; }
+            return message.reply({ content: `🎨 هذا بانل الألوان محدّث بالصورة في <#${r.channelId}> ✅`, files });
+        } catch (e) {
+            return message.reply('⚠️ ' + (e.message || 'تعذر تحديث بانل الألوان'));
+        }
     }
 
     // أوامر بالكلام: يا عبد + اسم الأمر

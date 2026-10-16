@@ -165,10 +165,10 @@ const refreshQuiet = (g, gid) => sendPanel(g, gid).catch(() => null);
 // ===== تجهيز الألوان الصريحة (Standard Colors) =====
 const canManage = (g) => !!(g.members.me && g.members.me.permissions.has('ManageRoles'));
 
-// روم الألوان المحتمل (لو ما تحدد باللوحة) — ندوّر روم نصي باسم فيه "الوان" أو "color"
+// روم الألوان المحتمل (لو ما تحدد باللوحة) — ندوّر روم نصي باسم فيه "الوان" أو "لونك" أو "color"
 function findColorChannel(g) {
     return [...g.channels.cache.values()].find((c) =>
-        !c.isThread() && c.isTextBased() && !c.isVoiceBased() && /الوان|اللوان|رتب[-_ ]?الوان|colors?/i.test(c.name)) || null;
+        !c.isThread() && c.isTextBased() && !c.isVoiceBased() && /الوان|للوان|لونك|لوني|colors?/i.test(c.name)) || null;
 }
 
 // ينشئ/يصحّح الألوان الصريحة الـ14 بالسيرفر ويخلي قائمة الألوان عليهم بالضبط
@@ -404,6 +404,7 @@ function ensure(client, CONFIG, delay = 10_000) {
                 await g.channels.fetch().catch(() => null);
                 const ch = findColorChannel(g);
                 if (ch) { cfg.channelId = ch.id; writeCfg(gid, cfg); console.log(`🎨 روم الألوان: #${ch.name}`); }
+                else console.warn('⚠️ ما لقيت روم ألوان تلقائياً — حدّده من صفحة «رتب الألوان» بالداشبورد');
             }
 
             // 3) إرسال/تحديث البانل
