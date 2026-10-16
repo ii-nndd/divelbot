@@ -8,6 +8,7 @@ const {
 const express = require('express');
 const R = require('./replies');
 const store = require('./store');
+const botcontrol = require('./botcontrol');
 const mountDashboard = require('./dashboard');
 const welcome = require('./welcome');
 const tickets = require('./tickets');
@@ -117,17 +118,27 @@ setInterval(() => {
 
 // ====================================================================
 // 5. الفويس + إعادة الاتصال التلقائي
+// الروم الصوتي ومفتاح التشغيل يتقروا من botcontrol (يعدلها الداشبورد فوراً)
 // ====================================================================
 let connection = null;
-let manualLeave = false;
 let connecting = false;
+let currentVoiceId = '';   // الروم اللي البوت فيه حالياً
 
-async function connectToVoice() {
+// الروم الصوتي المستهدف: المحدد من الداشبورد، وإلا الافتراضي من CONFIG
+const voiceTargetId = () => botcontrol.voiceChannelId(CONFIG.GUILD_ID, CONFIG.VOICE_CHANNEL_ID);
+
+const isInVoice = () => !!connection && connection.state.status === VoiceConnectionStatus.Ready;
+
+async function connectToVoice(force = false) {
     if (connecting) return;
+    const targetId = voiceTargetId();
+    if (!targetId) return;
+    // لو متصل أصلاً بنفس الروم المطلوب، ما نسوي شي (إلا لو force)
+    if (!force && isInVoice() && currentVoiceId === targetId) return;
     connecting = true;
     let conn = null;
     try {
-        const channel = await client.channels.fetch(CONFIG.VOICE_CHANNEL_ID);
+        const channel = await client.channels.fetch(targetId);
         if (!channel || !channel.isVoiceBased()) return;
 
         if (connection) {
@@ -142,6 +153,7 @@ async function connectToVoice() {
             selfMute: true
         });
         connection = conn;
+        currentVoiceId = channel.id;
 
         conn.on(VoiceConnectionStatus.Disconnected, async () => {
             try {
@@ -160,35 +172,51 @@ async function connectToVoice() {
         });
 
         await entersState(conn, VoiceConnectionStatus.Ready, 20_000);
-        console.log('🎙️ دخل الفويس بنجاح');
+        console.log(`🎙️ دخل الفويس بنجاح (${channel.name})`);
     } catch (err) {
         console.error('❌ فشل الدخول للفويس:', err.message);
         // تنظيف المحاولة الفاشلة عشان الحارس يقدر يعيد المحاولة
         try { if (conn) conn.destroy(); } catch {}
         if (connection === conn) connection = null;
-        if (!manualLeave) setTimeout(connectToVoice, 15_000);
+        currentVoiceId = '';
+        // نعيد المحاولة إلا لو المفتاح مطفي من الداشبورد
+        if (botcontrol.voiceEnabled(CONFIG.GUILD_ID)) setTimeout(() => connectToVoice(true), 15_000);
     } finally {
         connecting = false;
     }
 }
 
 function disconnectFromVoice() {
-    manualLeave = true;
     if (connection) {
         try { connection.destroy(); } catch {}
         connection = null;
     }
+    currentVoiceId = '';
 }
 
-// حارس: كل دقيقة يتأكد إن البوت بالفويس، وإلا يرجعه
+// حارس: كل دقيقة يتأكد إن البوت بالروم الصوتي الصح، وإلا يرجعه/ينقله
 setInterval(() => {
-    if (manualLeave || connecting) return;
+    if (connecting) return;
+    const target = voiceTargetId();
+    const want = botcontrol.voiceEnabled(CONFIG.GUILD_ID) && !!target;
+    // المفتاح مطفي أو ما فيه روم: نتأكد إن البوت خارج الفويس
+    if (!want) { if (connection || isInVoice()) disconnectFromVoice(); return; }
     const dead = !connection || connection.state.status === VoiceConnectionStatus.Destroyed;
-    if (dead) {
-        console.log('🔁 البوت مو بالفويس، أعيد الاتصال...');
-        connectToVoice();
+    if (dead || currentVoiceId !== target) {
+        console.log('🔁 مزامنة الفويس مع إعدادات اللوحة...');
+        connectToVoice(true);
     }
 }, 60_000);
+
+// يخلي الداشبورد يقدر يدخل/يطلع/ينقل البوت فوراً عند الحفظ
+botcontrol.onVoiceChange((gid) => {
+    if (gid !== CONFIG.GUILD_ID) return;
+    if (!botcontrol.voiceEnabled(gid)) return disconnectFromVoice();
+    connectToVoice(true);
+});
+
+// حالة الفويس للوحة التحكم
+client.voiceInfo = () => ({ inVoice: isInVoice(), channelId: currentVoiceId || '' });
 
 // ====================================================================
 // 6. تعريف أوامر السلاش
@@ -265,6 +293,8 @@ client.on('interactionCreate', async (interaction) => {
         return;
     }
     if (!interaction.isChatInputCommand()) return;
+    // الرومات المسموح فيها: لو الروم معطّل أو خارج القائمة المسموحة، البوت يتجاهل الأمر تماماً
+    if (interaction.guild && interaction.channel && !botcontrol.canInteract(interaction.guild.id, interaction.channel.id)) return;
     if (await tickets.handle(interaction, { getTier, CONFIG, pick })) return;
     if (await games.handle(interaction, { getTier, CONFIG, pick })) return;
     if (await points.handle(interaction, { getTier, CONFIG, pick })) return;
@@ -284,19 +314,19 @@ client.on('interactionCreate', async (interaction) => {
         switch (name) {
             case 'تعال':
                 if (!hasAccess(tier)) return denied();
-                manualLeave = false;
-                connectToVoice();
+                botcontrol.set(CONFIG.GUILD_ID, { voiceEnabled: true });
+                connectToVoice(true);
                 return interaction.reply('🫡 أبشر يا طويل العمر، دخلت الفويس بأمرك السامي! 🎙️');
 
             case 'اطلع':
                 if (!hasAccess(tier)) return denied();
+                botcontrol.set(CONFIG.GUILD_ID, { voiceEnabled: false });
                 disconnectFromVoice();
                 return interaction.reply('👋 سمعاً وطاعة، طلعت من الفويس يا طويل العمر! 🚪');
 
             case 'حالة': {
-                const inVoice = connection && connection.state.status === VoiceConnectionStatus.Ready;
                 const e = new EmbedBuilder().setColor(0xb3121e).setDescription(rpFor('status', interaction.user.id, tier))
-                    .addFields({ name: '📡 الفويس', value: inVoice ? 'متصل ✅' : 'غير متصل ❌', inline: true });
+                    .addFields({ name: '📡 الفويس', value: isInVoice() ? 'متصل ✅' : 'غير متصل ❌', inline: true });
                 return interaction.reply({ embeds: [e] });
             }
 
@@ -389,7 +419,7 @@ client.on('interactionCreate', async (interaction) => {
                         { name: '🎉 فعاليات', value: '`/قرعة_بدء` `/قرعة_انهاء` `/رتب_لوحة`' },
                         { name: '📊 عام', value: '`/حالة` `/بينج` `/فلوس` `/سيرفر`' },
                         { name: '🛡️ إدارة', value: '`/طرد` `/حظر` `/فك_حظر` `/ميوت` `/فك_ميوت` `/مسح` `/قفل` `/فتح` `/بطيء` `/رتبة_اضافة` `/رتبة_ازالة` `/لقب` `/صوت` `/نقل` `/اعلان` `/تحذير` `/تحذيرات` `/معلومات_عضو` `/معلومات_سيرفر` `/متجر_اضافة` `/متجر_حذف`' },
-                        { name: '💬 بالكلام', value: 'نادني: **يا عبد نكتة** / **يا عبد سرعة** / **يا عبد نقاطي** / **يا عبد نرد 20**، أو رد على رسالتي.\n🛡️ وحتى الإدارة بالكلام: **يا عبد طرد @فلان يسب الناس** / **يا عبد ميوت @فلان 10 دقايق مزعج** / **يا عبد مسح 20** / **يا عبد باند @فلان**.' }
+                        { name: '💬 بالكلام', value: 'نادني: **يا عبد نكتة** / **يا عبد سرعة** / **يا عبد نقاطي** / **يا عبد نرد 20**، أو رد على رسالتي.\n🛡️ وحتى الإدارة بالكلام: **يا عبد طرد @فلان يسب الناس** / **يا عبد ميوت @فلان 10 دقايق مزعج** / **يا عبد مسح 20** / **يا عبد باند @فلان**.\n🎛️ والتحكم بالبوت: **يا عبد فك البوت** (يفك نفسه من الروم) / **يا عبد شغل البوت** (يرجع للتفاعل).' }
                     );
                 return interaction.reply({ embeds: [helpEmbed] });
             }
@@ -443,8 +473,42 @@ async function isCalled(message, tokens, content) {
     return false;
 }
 
+// أوامر الكلام لتفعيل/تعطيل البوت في الروم الحالي: "يا عبد فك البوت" / "يا عبد شغل البوت"
+// ترجع true لو تعاملنا مع الرسالة (تفك البوت أو ترجعه) عشان نوقف باقي المعالجة.
+const norm = (t) => t.replace(/[\u064B-\u0652\u0640]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+async function handleChannelToggle(message) {
+    const c = norm(message.content);
+    const called = message.mentions.has(client.user, { ignoreEveryone: true, ignoreRoles: true }) || c.includes('يا عبد');
+    if (!called) return false;
+
+    const off = ['فك البوت', 'افك البوت', 'فكيني', 'عطل البوت', 'طفي البوت', 'اوقف البوت', 'فك التفاعل', 'عطل التفاعل']
+        .some(k => c.includes(k));
+    const on = ['شغل البوت', 'فعل البوت', 'رجع البوت', 'ارجع البوت', 'شغل التفاعل', 'فعل التفاعل']
+        .some(k => c.includes(k));
+    if (!off && !on) return false;
+
+    const tier = getTier(message.author.id, message.member);
+    if (!hasAccess(tier)) {
+        await message.reply('❌ هذا الأمر خاص بمولاي ارثر والملكة إيدا وأصحاب الرتب بس! 💅').catch(() => {});
+        return true;
+    }
+    botcontrol.toggleChannel(message.guild.id, message.channel.id, on);
+    await message.reply(on
+        ? '✅ رجعت للتفاعل في هذا الروم.'
+        : '⛔ تم، فكيت نفسي من هذا الروم. لو تبي ترجعني بأي وقت كتب: **يا عبد شغل البوت**.').catch(() => {});
+    return true;
+}
+
 client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.guild) return;
+
+    // أوامر تفعيل/تعطيل البوت بالروم: تشتغل حتى لو الروم معطّل عشان تقدر ترجع البوت بأمر
+    if (await handleChannelToggle(message)) return;
+
+    // الرومات المسموح فيها: لو الروم معطّل أو خارج القائمة المسموحة، البوت يتجاهل الرسالة تماماً.
+    // ملاحظة: روم الفخ (trap.js) له معالج مستقل، فالحظر التلقائي ما يتأثر بهذا السطر أبداً.
+    if (!botcontrol.canInteract(message.guild.id, message.channel.id)) return;
+
     points.onMessage(message, getTier(message.author.id, message.member)).catch(() => {});
 
     const content = message.content.trim();
@@ -478,12 +542,12 @@ client.on('messageCreate', async (message) => {
     // أوامر بالكلام: يا عبد + اسم الأمر
     if (w('تعال', 'ادخل', 'دخلني')) {
         if (!access) return deny();
-        manualLeave = false; connectToVoice();
+        botcontrol.set(CONFIG.GUILD_ID, { voiceEnabled: true }); connectToVoice(true);
         return message.reply('🫡 أبشر يا طويل العمر، دخلت الفويس بأمرك السامي! 🎙️');
     }
     if (w('اطلع', 'اخرج')) {
         if (!access) return deny();
-        disconnectFromVoice();
+        botcontrol.set(CONFIG.GUILD_ID, { voiceEnabled: false }); disconnectFromVoice();
         return message.reply('👋 سمعاً وطاعة، طلعت من الفويس يا طويل العمر! 🚪');
     }
     if (w('تنبيه')) { if (!access) return deny(); return message.reply(rp('alerts')); }
@@ -494,8 +558,7 @@ client.on('messageCreate', async (message) => {
         return message.reply(`🎲 رميت نرد (${sides} وجه) وطلع: **${1 + Math.floor(Math.random() * sides)}**`);
     }
     if (w('حاله', 'status')) {
-        const inVoice = connection && connection.state.status === VoiceConnectionStatus.Ready;
-        return message.reply(`${rpFor('status', message.author.id, tier)}\n📡 الفويس: ${inVoice ? 'متصل ✅' : 'غير متصل ❌'}`);
+        return message.reply(`${rpFor('status', message.author.id, tier)}\n📡 الفويس: ${isInVoice() ? 'متصل ✅' : 'غير متصل ❌'}`);
     }
     if (w('فلوس', 'راتب')) {
         return message.reply((tier === 'arthur' || tier === 'ida')

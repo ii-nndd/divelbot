@@ -10,6 +10,7 @@ const tickets = require('./tickets');
 const jail = require('./jail');
 const trap = require('./trap');
 const points = require('./points');
+const botcontrol = require('./botcontrol');
 
 const BASE = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'https://divelbot.onrender.com';
 const SECRET = process.env.SESSION_SECRET;
@@ -78,6 +79,15 @@ button.btn:active,button.b2:active,button.dn:active{transform:scale(.98)}
 .item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #2a2836;flex-wrap:wrap}
 .item .nm{flex:1;min-width:120px}.tag{background:#22212c;border:1px solid #33314a;border-radius:20px;padding:2px 10px;font-size:12px;color:#c9c6d6}
 .cat{color:#f0566a;font-weight:600;margin:14px 0 4px}.sw{width:18px;height:18px;border-radius:50%;border:1px solid #444}
+.tgl{position:relative;display:inline-block;width:54px;height:30px;flex-shrink:0;vertical-align:middle}
+.tgl input{opacity:0;width:0;height:0;position:absolute}
+.tgl .sl{position:absolute;cursor:pointer;inset:0;background:#3a3748;border-radius:30px;transition:background .2s;border:1px solid #45425a}
+.tgl .sl:before{content:"";position:absolute;height:22px;width:22px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.tgl input:checked+.sl{background:linear-gradient(135deg,#1f9d55,#12703b);border-color:#1f9d55}
+.tgl input:checked+.sl:before{transform:translateX(24px)}
+.tgl input:disabled+.sl{opacity:.5;cursor:wait}
+.tag.on{background:#12351f;border-color:#1f9d55;color:#7fe0a5}
+.tag.off{background:#3a1418;border-color:#8b1f2a;color:#ff9aa5}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1f6f3f;padding:10px 18px;border-radius:10px;opacity:0;transition:.3s;pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.4)}
 #toast.err{background:#9b2020}#toast.on{opacity:1}a.btn{display:inline-block;text-decoration:none;padding:12px 20px;border-radius:10px}
 @media(max-width:800px){.app{flex-direction:column}.sb{position:fixed;bottom:0;left:0;right:0;z-index:5;width:auto;flex-direction:row;overflow-x:auto;padding:8px 8px calc(8px + env(safe-area-inset-bottom));border-left:0;border-top:1px solid #2a2836}.logo{display:none}.nav{white-space:nowrap;padding:10px 12px;font-size:14px}.main{padding:16px 14px calc(86px + env(safe-area-inset-bottom));padding-top:calc(16px + env(safe-area-inset-top))}}
@@ -92,11 +102,48 @@ function card(title,child){return el('div',{class:'card'},[title?el('div',{class
 function row(k){return el('div',{class:'row'},k)}
 function go(fn,msg,page){fn.then(function(){toast(msg||'تم ✅');if(page)show(page)}).catch(function(e){toast(e.message,1)})}
 var NOVA_MARK_SVG='<svg width="22" height="22" viewBox="0 0 100 100" style="vertical-align:-5px;margin-left:8px"><defs><radialGradient id="ngc" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff6e8"/><stop offset="45%" stop-color="#ff8a3d"/><stop offset="100%" stop-color="#b3121e"/></radialGradient></defs><g fill="url(#ngc)"><polygon points="50,6 58,42 94,50 58,58 50,94 42,58 6,50 42,42"/><polygon points="50,24 54,42 50,50 46,42" opacity="0"/></g><circle cx="50" cy="50" r="13" fill="url(#ngc)"/></svg>';
+function sw(on,fn){var i=el('input',{type:'checkbox'});i.checked=!!on;i.addEventListener('change',function(){fn(i.checked)});return el('span',{class:'tgl'},[i,el('span',{class:'sl'})])}
 var pages={},cur='overview';
-var NAV=[['overview','نظرة عامة'],['channels','الرومات'],['roles','الرتب'],['members','الأعضاء'],['welcome','الترحيب'],['tickets','التذاكر'],['jail','السجن'],['trap','روم الفخ'],['bans','المحظورين'],['announce','الإعلانات'],['log','السجل']];
+var NAV=[['overview','نظرة عامة'],['bot','التحكم بالبوت'],['channels','الرومات'],['roles','الرتب'],['members','الأعضاء'],['welcome','الترحيب'],['tickets','التذاكر'],['jail','السجن'],['trap','روم الفخ'],['bans','المحظورين'],['announce','الإعلانات'],['log','السجل']];
 function show(p){cur=p;var m=$('main');m.innerHTML='';[].forEach.call(document.querySelectorAll('.nav'),function(n){n.className='nav'+(n.dataset.p===p?' on':'')});pages[p](m).catch(function(e){toast(e.message,1)})}
 pages.overview=function(m){return api('overview').then(function(d){m.appendChild(el('h1',{text:d.name}));m.appendChild(el('div',{class:'mut',text:'تحكم كامل بالسيرفر، والتعديل ينفذ فور الضغط'}));
 var s=el('div',{class:'stats'});[['الأعضاء',d.members],['الرومات',d.channels],['الرتب',d.roles]].forEach(function(x){s.appendChild(el('div',{class:'card'},[el('div',{class:'mut',text:x[0]}),el('div',{class:'big',text:String(x[1])})]))});m.appendChild(s)})};
+pages.bot=function(m){return api('bot').then(function(d){var c=d.config;
+m.appendChild(el('h1',{text:'التحكم بالبوت'}));
+m.appendChild(el('div',{class:'mut',text:'حدّد الرومات المسموح للبوت يتفاعل فيها، وفعّل/عطّل البوت في أي روم بنقرة وحدة. في وضع "الرومات المحددة فقط" البوت يتجاهل أي رسالة أو أمر خارج الرومات المفعّلة تماماً. تنبيه: الحظر التلقائي في روم الفخ نظام مستقل وما يتأثر بهذي الإعدادات أبداً.'}));
+var mb=el('div',{class:'card'});
+mb.appendChild(el('div',{class:'row'},[sw(c.restrict,function(v){api('bot/save',{restrict:v}).then(function(){toast(v?'الوضع: رومات محددة فقط ✅':'الوضع: كل الرومات ✅');show('bot')}).catch(function(e){toast(e.message,1);show('bot')})}),el('span',{text:'وضع "الرومات المحددة فقط" (White-list) — '+(c.restrict?'مفعّل: البوت يشتغل بس بالرومات المفعّلة تحت':'معطّل: البوت يشتغل بكل الرومات')})]));
+m.appendChild(mb);
+var texts=d.channels.filter(function(x){return x.type==='text'});
+function bulk(v){var ids=texts.map(function(x){return x.id});if(!ids.length)return toast('ما فيه رومات',1);if(!confirm(v?'تفعيل البوت في كل الرومات؟':'تعطيل البوت في كل الرومات؟'))return;go(api('bot/channels',{ids:ids,value:v}),'تم ✅','bot')}
+var tb=el('div',{class:'card'});
+tb.appendChild(el('div',{class:'cat',text:'الرومات الكتابية — مفتاح تفعيل/تعطيل البوت في كل روم'}));
+tb.appendChild(el('div',{class:'row',style:'margin:6px 0 10px'},[
+  el('button',{class:'b2',text:'✅ تفعيل الكل',on:{click:function(){bulk(true)}}}),
+  el('button',{class:'b2',text:'⛔ تعطيل الكل',on:{click:function(){bulk(false)}}}),
+  el('button',{class:'b2',text:'↺ رجوع للافتراضي',on:{click:function(){if(confirm('يمسح كل التفعيلات اليدوية ويرجع للوضع الافتراضي؟'))go(api('bot/channels',{mode:'clear'}),'تم ✅','bot')}}})
+]));
+texts.forEach(function(x){
+  var s=sw(x.enabled,function(v){api('bot/channel',{id:x.id,value:v}).then(function(){toast((v?'✅ مفعّل في ':'⛔ معطّل في ')+'#'+x.name);show('bot')}).catch(function(e){toast(e.message,1);show('bot')})});
+  tb.appendChild(el('div',{class:'item'},[el('span',{class:'nm',text:'# '+x.name}),x.explicit?null:el('span',{class:'tag',text:'افتراضي'}),el('span',{class:'tag '+(x.enabled?'on':'off'),text:x.enabled?'مفعّل':'معطّل'}),s]));
+});
+m.appendChild(tb);
+var vst=d.voice||{};
+var vc=el('div',{class:'card'});
+vc.appendChild(el('div',{class:'cat',text:'الروم الصوتي (وجود البوت بالفويس)'}));
+vc.appendChild(el('div',{class:'item'},[el('span',{class:'nm',text:'الحالة الحالية: '+(vst.inVoice?('متصل ✅'+(vst.channelName?' بـ '+vst.channelName:'')):'غير متصل ❌')}),el('span',{class:'tag '+(c.voiceEnabled?'on':'off'),text:c.voiceEnabled?'المفتاح مفعّل':'المفتاح معطّل'}),sw(c.voiceEnabled,function(v){api('bot/save',{voiceEnabled:v}).then(function(){toast(v?'البوت يدخل الفويس ✅':'البوت يطلع من الفويس ⛔');show('bot')}).catch(function(e){toast(e.message,1);show('bot')})})]));
+vc.appendChild(el('div',{class:'mut',text:'الروم الصوتي اللي يجلس فيه البوت:'}));
+var vs=el('select',{},[opt('','الروم الافتراضي')].concat(d.voiceChannels.map(function(x){return opt(x.id,'🔊 '+x.name)})));vs.value=c.voiceChannelId||'';
+vs.addEventListener('change',function(){api('bot/save',{voiceChannelId:vs.value}).then(function(){toast('تم تحديث الروم الصوتي ✅');show('bot')}).catch(function(e){toast(e.message,1);show('bot')})});
+vc.appendChild(vs);
+vc.appendChild(el('p'));
+vc.appendChild(el('div',{class:'row'},[
+  el('button',{class:'btn',text:'🎙️ دخول الفويس الآن',on:{click:function(){go(api('bot/voice',{action:'join'}),'البوت دخل الفويس ✅','bot')}}}),
+  el('button',{class:'dn',text:'🚪 خروج من الفويس',on:{click:function(){go(api('bot/voice',{action:'leave'}),'البوت طلع من الفويس ✅','bot')}}})
+]));
+vc.appendChild(el('div',{class:'mut',style:'margin-top:8px',text:'التحكم السريع: /تعال و /اطع، أو بالكلام "يا عبد تعال" و "يا عبد اطلع". وفك/تشغيل البوت في الروم الكتابي: "يا عبد فك البوت" و "يا عبد شغل البوت".'}));
+m.appendChild(vc);
+return Promise.resolve()})};
 pages.channels=function(m){return api('channels').then(function(d){
 m.appendChild(el('h1',{text:'الرومات'}));var cats=d.channels.filter(function(c){return c.type==='category'});
 var name=el('input',{placeholder:'الاسم'}),type=el('select',{},[opt('text','روم نصي'),opt('voice','روم فويس'),opt('category','قسم')]),par=el('select',{},[opt('','بدون قسم')].concat(cats.map(function(c){return opt(c.id,c.name)})));
@@ -177,6 +224,7 @@ m.appendChild(el('div',{class:'mut',style:'margin-top:10px',text:'أي روم ج
 pages.trap=function(m){return api('trap').then(function(d){var c=d.config;
 m.appendChild(el('h1',{text:'روم الفخ'}));
 m.appendChild(el('div',{class:'mut',text:'أي حد يكتب برّوم معين (غير المستثنيين بالآيدي تحت) ينحظر تلقائي فوراً. فعّال ضد بوتات السبام/الراقات اللي تكتب بكل روم تشوفه. ارثر وإيدا والرتبة الملكية محميين دايماً تلقائياً.'}));
+m.appendChild(el('div',{class:'mut',style:'margin-top:6px;color:#7fe0a5',text:'🔒 نظام الحظر التلقائي مستقل تماماً عن "التحكم بالبوت": يشتغل حتى لو الروم معطّل أو خارج القائمة المسموح فيها، وتغيير رومات البوت التفاعلية ما يوقفه أو ينفكه.'}));
 function sel(first,list,val){var s=el('select',{},[opt('',first)].concat(list.map(function(x){return opt(x.id,x.name)})));s.value=val||'';return s}
 var en=el('input',{type:'checkbox'});en.checked=c.enabled;
 var tc=sel('اختر روم الفخ',d.channels,c.channelId);
@@ -355,8 +403,54 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
     api.post('/channels/delete', h(async (g, b, req) => {
         if (b.confirm !== true) throw new Error('يحتاج تأكيد');
         const c = chan(g, b.id);
-        if (c.id === CONFIG.VOICE_CHANNEL_ID) throw new Error('هذا روم الفويس حق البوت، ما أحذفه');
+        if (c.id === CONFIG.VOICE_CHANNEL_ID || c.id === botcontrol.get(g.id).voiceChannelId) throw new Error('هذا روم الفويس حق البوت، ما أحذفه');
         const n = c.name; await c.delete('من لوحة التحكم'); note(req, `حذف: ${n}`);
+    }));
+
+    // ===== التحكم بالبوت: الرومات المسموح فيها + تشغيل/تعطيل البوت + الروم الصوتي =====
+    const voiceState = (g) => {
+        const st = typeof client.voiceInfo === 'function' ? client.voiceInfo() : { inVoice: false, channelId: '' };
+        const ch = st.channelId ? g.channels.cache.get(st.channelId) : null;
+        return { inVoice: !!st.inVoice, channelId: st.channelId || '', channelName: ch ? ch.name : '' };
+    };
+    api.get('/bot', h(async (g) => {
+        await g.channels.fetch();
+        const cfg = botcontrol.get(g.id);
+        const ch = [...g.channels.cache.values()].filter(c => !c.isThread());
+        return {
+            config: cfg,
+            channels: ch.filter(c => c.type === ChannelType.GuildText).sort((a, b) => a.rawPosition - b.rawPosition)
+                .map(c => ({ id: c.id, name: c.name, type: 'text', explicit: Object.prototype.hasOwnProperty.call(cfg.enabled, c.id), enabled: botcontrol.effective(g.id, c.id) })),
+            voiceChannels: ch.filter(c => c.type === ChannelType.GuildVoice || c.type === ChannelType.GuildStageVoice)
+                .sort((a, b) => a.rawPosition - b.rawPosition).map(c => ({ id: c.id, name: c.name })),
+            voice: voiceState(g)
+        };
+    }));
+    api.post('/bot/save', h(async (g, b, req) => {
+        const saved = botcontrol.set(g.id, b);
+        if ('voiceEnabled' in b || 'voiceChannelId' in b) botcontrol.applyVoice(g.id);
+        note(req, 'تعديل إعدادات التحكم بالبوت');
+        return { config: saved };
+    }));
+    api.post('/bot/channel', h(async (g, b, req) => {
+        const c = chan(g, b.id);
+        const enabled = botcontrol.toggleChannel(g.id, c.id, typeof b.value === 'boolean' ? b.value : undefined);
+        note(req, `${enabled ? 'تفعيل' : 'تعطيل'} البوت في #${c.name}`);
+        return { enabled };
+    }));
+    api.post('/bot/channels', h(async (g, b, req) => {
+        if (b.mode === 'clear') { botcontrol.clearOverrides(g.id); note(req, 'تصفير تفعيلات البوت في الرومات'); return {}; }
+        const ids = (Array.isArray(b.ids) ? b.ids : []).filter(id => g.channels.cache.has(String(id)));
+        const n = botcontrol.setManyChannels(g.id, ids, !!b.value);
+        note(req, `${b.value ? 'تفعيل' : 'تعطيل'} البوت في ${n} روم`);
+        return { count: n };
+    }));
+    api.post('/bot/voice', h(async (g, b, req) => {
+        const on = b.action === 'join';
+        botcontrol.set(g.id, { voiceEnabled: on });
+        botcontrol.applyVoice(g.id);
+        note(req, on ? 'إدخال البوت الفويس' : 'إخراج البوت من الفويس');
+        return { voice: voiceState(g) };
     }));
 
     api.get('/roles', h(async (g) => {

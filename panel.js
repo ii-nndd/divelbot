@@ -30,7 +30,7 @@ button.sec,.btn{background:#2c2c3a}button:disabled{opacity:.5}
 </div></div><div id="toast"></div>
 <script>
 var L={greet:'ترحيب',food:'أكل',hit:'ضرب',rude:'إهانة',thanks:'شكر',where:'وينك',move:'قوم/تحرك',status:'الحالة',help:'مساعدة',poems:'شعر',jokes:'نكت',alerts:'تنبيهات',welcome:'ترحيب الفويس',custom:'كلمات خاصة',games:'الألعاب'};
-var T={arthur:'ارثر',ida:'إيدا',royal:'الرتبة الملكية',peasant:'العشوائيين',all:'الكل',sentences:'جمل سرعة الكتابة',words:'كلمات المبعثرة',flags:'الأعلام',rawan:'روان',nabd:'نبض ارثر'};
+var T={arthur:'ارثر',ida:'إيدا',royal:'الرتبة الملكية',peasant:'بدون رتبة (الكل)',disrespect:'رتبة بدون احترام',all:'الكل',sentences:'جمل سرعة الكتابة',words:'كلمات المبعثرة',flags:'الأعلام',rawan:'روان',nabd:'نبض ارثر'};
 var $=function(i){return document.getElementById(i)},D={};
 function label(k){var p=k.split('.');return (L[p[0]]||p[0])+(p[1]?' ← '+(T[p[1]]||p[1]):'')}
 function toast(m,e){var t=$('toast');t.textContent=m;t.className=(e?'err ':'')+'on';setTimeout(function(){t.className=''},2200)}
