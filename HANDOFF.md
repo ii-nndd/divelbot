@@ -31,9 +31,10 @@ GET https://divelbot.onrender.com/health  →  503
 
 | المسار | الوصف | الحالة |
 |---|---|---|
-| **أ) حساب Render جديد** | بإيميل جديد + كلمة مرور. ⚠️ Render يمنع تسجيل الدخول بنفس GitHub («logs you in to the existing account automatically») — وبعدها نربط GitHub للنشر فقط. كل شي يشتغل مثل قبل (HTTPS + لوحة + Auto-Deploy) بصفر تعديلات. الخطر: ٧٤٤/٧٥٠ ساعة → **خدمة وحدة فقط** | أولوية أولى |
-| **ب) استضافة بوت مجانية** | **HeavenCloud** (٧١٥MB · ٢٤/٧ · تجديد كل ٧ أيام · بلا بطاقة) أو **Wispbyte** (٥١٢MB · دخول كل أسبوعين). أمر التشغيل `npm install --omit=dev && node index.js` و`KEEPALIVE=0` | خطة دائمة/احتياط |
+| ~~أ) حساب Render جديد~~ | ❌ **سقط**: Render صار يطلب **بطاقة** حتى على الخطة المجانية للحسابات الجديدة (جرّبه المستخدم بنفسه ١٧ أكتوبر ورجع يطلب البطاقة وهو مختار Free). الحساب القديم فقط وراثي بلا بطاقة → **لا يُحذف** | ❌ مستبعد |
+| **ب) استضافة بوت مجانية** | **HeavenCloud** (٧١٥MB · ٢٤/٧ · تجديد كل ٧ أيام · بلا بطاقة) أو **Wispbyte** (٥١٢MB · دخول كل أسبوعين). أمر التشغيل `npm install --omit=dev && node index.js`، `KEEPALIVE=0`، و**`TUNNEL=1`** | ✅ **المسار المعتمد** |
 | **ج) MongoDB Atlas M0** | ٥١٢MB مجاناً للأبد **بلا بطاقة** → الحفظ الدائم للبيانات مهما انتقلنا | ✅ مطلوب الآن |
+| **د) نفق Cloudflare التلقائي** | `tunnel.js` **مبني ومُختبر**: ينزّل `cloudflared`، يطلع رابط HTTPS، يحطه في `PUBLIC_URL`، ويسجّل `redirect_uri` عند Discord آلياً + يرسل الرابط برسالة خاصة | ✅ خلص |
 
 **مهام معلّقة نفّذها بطلب المستخدم:**
 - **«نفق Cloudflare تلقائي»** للمسار ب: البوت يشغّل `cloudflared` ويأخذ رابط HTTPS ويكتب `redirect_uri` عند Discord بنفسه (`PATCH /applications/@me`) ويرسل الرابط للمستخدم — عشان اللوحة تشتغل على Pterodactyl (ما يعطي رابط عام).
@@ -60,8 +61,10 @@ GET https://divelbot.onrender.com/health  →  503
 | `1715df9` | تحديث أرقام الـcommits في ملف السياق |
 | `836b94e` | أمر سلاش `/ألوان` + «يا عبد الألوان» (يولّد الصورة ويحدّث البانل **ويرسلها مع الرد**) + تحديث البانل تلقائيًا عند كل إقلاع + توسيع اكتشاف روم الألوان (`الوان\|للوان\|لونك\|لوني\|colors?`) |
 | `fb11fd6` | مفتاح `KEEPALIVE` (0 = يطفي النبض ويوفّر ساعات Render) + `render.yaml` + `تشغيل محلي.bat` + توثيق سبب الإيقاف |
+| `fc49d83` | **Oracle ملغاة** (تطلب بطاقة) + `deploy/HOSTING.md` (دليل الإعادة الكامل بلا بطاقة) |
+| `c1db886` | **نفق Cloudflare التلقائي** `tunnel.js` (`TUNNEL=1`) + `dashboard.js` يقرأ `BASE()` وقت الطلب + `TUNNEL` في `.env.example` |
 
-**الاختبارات كلها ناجحة آخر مرة:** `colors-test` 9/9 · `colors-preset-test` 9/9 · `colorimage-test` 7/7 · `dash-colors-test` 17/17 (jsdom) · `demo-test` 7/7 · `colors-cmd-test` 4/4 · `keepalive-test` ✅ · إقلاع بدون توكن (smoke) ✅ · `render.yaml` صالح ✅.
+**الاختبارات كلها ناجحة آخر مرة:** `colors-test` 9/9 · `colors-preset-test` 9/9 · `colorimage-test` 7/7 · `dash-colors-test` 17/17 (jsdom) · `demo-test` 7/7 · `colors-cmd-test` 4/4 · `keepalive-test` ✅ · إقلاع بدون توكن (smoke) ✅ · `render.yaml` صالح ✅ · **النفق: نزّل cloudflared (52.8MB) وطلع رابط HTTPS فعلي ورجع `/health` = 200 ✅ (اختبار حقيقي من الإنترنت)**.
 
 ملفات الاختبار في `C:\Users\dlel\AppData\Local\Temp\opencode\` (خارج المشروع، ما تنرفع).
 
@@ -127,8 +130,9 @@ npm.cmd   # npm مباشرة محجوب بسبب Execution Policy
 
 ## ✅ ٨) الخطوة التالية بالضبط
 
-1. المستخدم: يجمع القيم السرية من خدمة Render القديمة (Environment) + يسوي حساب Render جديد بإيميل جديد.
-2. المستخدم: ينشئ الخدمة من Blueprint (`render.yaml`) ويعبّي القيم.
-3. أنا: أتأكد من `/health` واللوحة، وأضيف Redirect URI الجديد، وأتابع معه.
-4. المستخدم: **يحذف خدمة Render القديمة قبل ١ نوفمبر**.
-5. مؤجل بالطلب: «نفق Cloudflare التلقائي» للمسار (ب)، وGitHub Action للنشر عبر Deploy Hook لو نشر بـPublic Git Repository.
+1. ✅ المستخدم انسخ القيم السرية من خدمة Render القديمة (Environment) وحفظها عنده.
+2. المستخدم: يسجّل في **HeavenCloud** (لازم يدخل سيرفرهم بالديسكورد أول: `discord.gg/getvps`) وينشئ سيرفر **Node.js** مجاني في Nuremberg.
+3. المستخدم: يرفع الكود (ZIP من GitHub أو `git clone`) + يضبط متغيرات البيئة (`TUNNEL=1` · `KEEPALIVE=0` · `MONGODB_URI` …) + أمر التشغيل `npm install --omit=dev && node index.js`.
+4. أنا: أتابع الـConsole معه، أتأكد من `/health`، وأتأكد إن النفق طلع ورسل رابط اللوحة.
+5. المستخدم: **يحذف خدمة Render القديمة قبل ١ نوفمبر** (ولا يحذف الحساب القديم نفسه — وراثي بدون بطاقة).
+6. مطلوب كذلك: ضبط **MongoDB Atlas M0** (`deploy/HOSTING.md` قسم ج) قبل الاعتماد على البيانات.
