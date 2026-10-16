@@ -12,6 +12,7 @@ const trap = require('./trap');
 const points = require('./points');
 const levels = require('./levels');
 const botcontrol = require('./botcontrol');
+const colors = require('./colors');
 
 const BASE = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'https://divelbot.onrender.com';
 const SECRET = process.env.SESSION_SECRET;
@@ -110,7 +111,7 @@ function go(fn,msg,page){fn.then(function(){toast(msg||'تم ✅');if(page)show(
 var NOVA_MARK_SVG='<svg width="22" height="22" viewBox="0 0 100 100" style="vertical-align:-5px;margin-left:8px"><defs><radialGradient id="ngc" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff6e8"/><stop offset="45%" stop-color="#ff8a3d"/><stop offset="100%" stop-color="#b3121e"/></radialGradient></defs><g fill="url(#ngc)"><polygon points="50,6 58,42 94,50 58,58 50,94 42,58 6,50 42,42"/><polygon points="50,24 54,42 50,50 46,42" opacity="0"/></g><circle cx="50" cy="50" r="13" fill="url(#ngc)"/></svg>';
 function sw(on,fn){var i=el('input',{type:'checkbox'});i.checked=!!on;i.addEventListener('change',function(){fn(i.checked)});return el('span',{class:'tgl'},[i,el('span',{class:'sl'})])}
 var pages={},cur='overview';
-var NAV=[['overview','نظرة عامة'],['bot','التحكم بالبوت'],['channels','الرومات'],['roles','الرتب'],['members','الأعضاء'],['levels','المستويات'],['welcome','الترحيب'],['tickets','التذاكر'],['jail','السجن'],['trap','روم الفخ'],['bans','المحظورين'],['announce','الإعلانات'],['log','السجل']];
+var NAV=[['overview','نظرة عامة'],['bot','التحكم بالبوت'],['channels','الرومات'],['roles','الرتب'],['colors','رتب الألوان'],['members','الأعضاء'],['levels','المستويات'],['welcome','الترحيب'],['tickets','التذاكر'],['jail','السجن'],['trap','روم الفخ'],['bans','المحظورين'],['announce','الإعلانات'],['log','السجل']];
 function show(p){cur=p;var m=$('main');m.innerHTML='';[].forEach.call(document.querySelectorAll('.nav'),function(n){n.className='nav'+(n.dataset.p===p?' on':'')});pages[p](m).catch(function(e){toast(e.message,1)})}
 pages.overview=function(m){return api('overview').then(function(d){m.appendChild(el('h1',{text:d.name}));m.appendChild(el('div',{class:'mut',text:'تحكم كامل بالسيرفر، والتعديل ينفذ فور الضغط'}));
 var s=el('div',{class:'stats'});[['الأعضاء',d.members],['الرومات',d.channels],['الرتب',d.roles]].forEach(function(x){s.appendChild(el('div',{class:'card'},[el('div',{class:'mut',text:x[0]}),el('div',{class:'big',text:String(x[1])})]))});m.appendChild(s)})};
@@ -169,6 +170,87 @@ if(r.editable){var c=el('input',{type:'color',value:r.color});c.addEventListener
 k.push(el('button',{class:'b2',text:'تسمية',on:{click:function(){var n=prompt('الاسم الجديد',r.name);if(n)go(api('roles/edit',{id:r.id,name:n}),'تم ✅','roles')}}}));
 k.push(el('button',{class:'dn',text:'حذف',on:{click:function(){if(confirm('تأكيد حذف الرتبة: '+r.name+' ؟'))go(api('roles/delete',{id:r.id,confirm:true}),'تم الحذف','roles')}}}))}else k.push(el('span',{class:'tag',text:'محمية'}));
 box.appendChild(el('div',{class:'item'},k))});m.appendChild(box)})};
+// ===== رتب الألوان: روم البانل + إدارة الألوان + إزالة شاملة =====
+pages.colors=function(m){return api('colors').then(function(d){var c=d.config;
+var nf=function(n){return Number(n||0).toLocaleString('en-US')};
+m.appendChild(el('h1',{text:'رتب الألوان'}));
+m.appendChild(el('div',{class:'mut',text:'نظام ألوان كامل: قائمة ألوان بروم مخصص يختار منها الأعضاء لونهم (لون واحد لكل عضو)، مع إدارة كاملة للألوان من هنا: إنشاء، ربط رتبة موجودة، تعديل، حذف، وتحديث البانل بنقرة وحدة.'}));
+if(d.needPerm)m.appendChild(card('',el('div',{class:'mut',style:'color:#ff8a8a',text:'⚠️ البوت ما عنده صلاحية Manage Roles أو رتبته مو فوق رتب الألوان — أعطه الصلاحية وارفعه فوق الألوان عشان الإدارة تشتغل.'})));
+
+var chs=el('select',{},[opt('','— اختر روم —')].concat(d.channels.map(function(x){return opt(x.id,'# '+x.name)})));chs.value=c.channelId||'';
+var ti=el('input',{placeholder:'عنوان قائمة الألوان',value:c.title||'',style:'flex:1;min-width:190px'});
+var de=el('textarea',{placeholder:'وصف قائمة الألوان'});de.value=c.desc||'';
+var c1=el('div',{class:'card'});
+c1.appendChild(el('div',{class:'cat',text:'١) روم قائمة الألوان 📍'}));
+c1.appendChild(row([chs,el('button',{class:'btn',text:'💾 حفظ الإعدادات',on:{click:function(){go(api('colors/save',{channelId:chs.value,title:ti.value,desc:de.value}),'انحفظ ✅','colors')}}})]));
+c1.appendChild(el('div',{class:'mut',style:'margin:8px 0',text:'الحالة: '+(c.channelName?'الروم #'+c.channelName:'ما تحدد روم بعد')+(c.messageId?' • البانل مرسل ومربوط ✅':' • ما فيه بانل مرسل حالياً')}));
+c1.appendChild(row([el('span',{class:'mut',text:'العنوان'}),ti]));
+c1.appendChild(el('div',{style:'margin-top:10px'},[de]));
+c1.appendChild(el('div',{class:'row',style:'margin-top:10px'},[
+  el('button',{class:'btn',text:'🔄 تحديث البانل الحالي',on:{click:function(){if(!c.channelId)return toast('حدّد الروم واحفظ أول',1);go(api('colors/panel',{}),'انحدّث البانل ✅')}}}),
+  el('button',{class:'b2',text:'📨 إعادة إرسال البانل',on:{click:function(){if(!c.channelId)return toast('حدّد الروم واحفظ أول',1);if(!confirm('نرسل بانل ألوان جديد بالروم (وتنحذف الرسالة القديمة)؟'))return;go(api('colors/panel',{resend:true}),'انرسل البانل ✅','colors')}}})
+]));
+m.appendChild(c1);
+
+var nm=el('input',{placeholder:'اسم اللون — مثال: أحمر ملكي',style:'flex:1;min-width:170px'}),col=el('input',{type:'color',value:'#b3121e'});
+var c2=el('div',{class:'card'});
+c2.appendChild(el('div',{class:'cat',text:'٢) إضافة لون جديد ➕'}));
+c2.appendChild(row([nm,col,el('button',{class:'btn',text:'إنشاء رتبة لون',on:{click:function(){if(!nm.value.trim())return toast('اكتب اسم اللون',1);go(api('colors/add',{name:nm.value,color:col.value}),'انضاف اللون ✅','colors')}}})]));
+c2.appendChild(el('div',{class:'mut',style:'margin-top:12px',text:'أو اربط رتبة موجودة بالسيرفر كلون (بدون ما ينشئ رتبة جديدة):'}));
+var ex=el('select',{style:'flex:1;min-width:180px'},[opt('','— اختر رتبة موجودة —')].concat(d.guildRoles.map(function(r){return opt(r.id,r.name+' ('+r.color+')')})));
+c2.appendChild(row([ex,el('button',{class:'b2',text:'🔗 ربط كلون',on:{click:function(){if(!ex.value)return toast('اختر رتبة',1);go(api('colors/add',{roleId:ex.value}),'انربط ✅','colors')}}})]));
+m.appendChild(c2);
+
+var counts={};
+var c3=el('div',{class:'card'});
+c3.appendChild(el('div',{class:'cat',text:'٣) الألوان المضافة ('+c.roles.length+' / '+d.max+')'}));
+if(!c.roles.length)c3.appendChild(el('div',{class:'mut',text:'ما فيه ألوان بعد — أضف أول لون من فوق.'}));
+c.roles.forEach(function(r){
+  var cc=el('input',{type:'color',value:r.color});
+  cc.addEventListener('change',function(){go(api('colors/edit',{id:r.id,color:cc.value}),'تغيّر اللون ✅','colors')});
+  var ce=el('span',{class:'tag',text:'... عضو'});counts[r.id]=ce;
+  c3.appendChild(el('div',{class:'item'},[
+    el('span',{class:'sw',style:'background:'+r.color}),
+    el('span',{class:'nm',text:r.name}),
+    el('span',{class:'tag',text:r.color}),
+    ce,cc,
+    el('button',{class:'b2',text:'✏️ تسمية',on:{click:function(){var n=prompt('اسم اللون الجديد',r.name);if(n)go(api('colors/edit',{id:r.id,name:n}),'تم ✅','colors')}}}),
+    el('button',{class:'b2',text:'إزالة من القائمة',on:{click:function(){if(confirm('نشيل اللون من القائمة؟ (الرتبة تبقى موجودة بالسيرفر)'))go(api('colors/delete',{id:r.id,confirm:true}),'انشال من القائمة ✅','colors')}}}),
+    el('button',{class:'dn',text:'حذف الرتبة نهائياً',on:{click:function(){if(confirm('تأكيد: نحذف رتبة '+r.name+' نهائياً من السيرفر (وتنشال من كل الأعضاء)؟'))go(api('colors/delete',{id:r.id,confirm:true,deleteRole:true}),'انحذفت الرتبة','colors')}}})
+  ]));
+});
+m.appendChild(c3);
+
+var sumEl=el('div',{class:'mut',style:'margin:8px 0',text:'جاري حساب عدد الأعضاء...'});
+var c4=el('div',{class:'card'});
+c4.appendChild(el('div',{class:'cat',text:'٤) 🚨 إزالة شاملة لكل الألوان'}));
+c4.appendChild(el('div',{class:'mut',text:'تسحب كل رتب الألوان المضافة فوق من جميع أعضاء السيرفر بضغطة وحدة — مفيدة لو بغيت تعيد توزيع الألوان من جديد. الرتب نفسها تبقى بالسيرفر (ما تنحذف). العملية تشتغل بالخلفية وتشوف تقدمها تحت.'}));
+c4.appendChild(sumEl);
+var ok=sw(false,function(){});
+c4.appendChild(el('div',{class:'item'},[el('span',{class:'nm',text:'أفهم إن العملية تسحب رتب الألوان من كل الأعضاء'}),ok]));
+var bar=el('div',{class:'bar'},[el('i',{style:'width:0%'})]);
+var st=el('div',{class:'mut',style:'margin:8px 0'});
+var runBtn=el('button',{class:'dn',text:'🚨 إزالة الألوان من جميع الأعضاء',on:{click:function(){
+  if(!c.roles.length)return toast('ما فيه ألوان مضافة',1);
+  if(!ok.querySelector('input').checked)return toast('فعّل مربع التأكيد أول',1);
+  if(!confirm('متأكد؟ الحين تنشال رتب الألوان من كل الأعضاء بالسيرفر.'))return;
+  go(api('colors/clear',{confirm:true}),'بدأت الإزالة...',null);
+  setTimeout(poll,1200);
+}}});
+c4.appendChild(el('div',{class:'row'},[runBtn]));
+c4.appendChild(bar);c4.appendChild(st);
+m.appendChild(c4);
+function draw(j){
+  if(!j||!j.startedAt){bar.querySelector('i').style.width='0%';st.textContent='ما فيه عملية إزالة شغالة';return}
+  var pc=j.total?Math.round((j.scanned/j.total)*100):0;
+  bar.querySelector('i').style.width=pc+'%';
+  st.textContent=(j.running?'⏳ جارية الآن':'✅ خلصت')+' — فحصنا '+nf(j.scanned)+' من '+nf(j.total)+' عضو • شلنا '+nf(j.removed)+' لون من '+nf(j.touched)+' عضو'+(j.failed?' • فشل '+nf(j.failed):'')+(j.error?' • خطأ: '+j.error:'');
+}
+function poll(){api('colors/clear/status').then(function(x){draw(x.clear);if(x.clear&&x.clear.running)setTimeout(poll,1500)}).catch(function(){})}
+draw(d.clear);
+if(d.clear&&d.clear.running)poll();
+api('colors/stats').then(function(s){c.roles.forEach(function(r){if(counts[r.id])counts[r.id].textContent=nf(s.roles[r.id]||0)+' عضو'});sumEl.textContent='عدد الأعضاء اللي شايلين لون حالياً: '+nf(s.withAny)+' من '+nf(s.members)}).catch(function(){sumEl.textContent='تعذر حساب عدد الأعضاء حالياً'});
+return Promise.resolve()})};
 pages.announce=function(m){return api('channels').then(function(d){m.appendChild(el('h1',{text:'الإعلانات'}));
 var ch=el('select',{},d.channels.filter(function(c){return c.type==='text'}).map(function(c){return opt(c.id,'# '+c.name)})),t=el('input',{placeholder:'العنوان (اختياري)',style:'width:100%;margin:10px 0'}),x=el('textarea',{placeholder:'نص الإعلان'});
 m.appendChild(card('',el('div',{},[ch,t,x,el('div',{style:'margin-top:10px'},[el('button',{class:'btn',text:'إرسال الإعلان',on:{click:function(){go(api('announce',{channelId:ch.value,title:t.value,text:x.value}),'انرسل ✅')}}})])])))})};
@@ -589,6 +671,70 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         if (!r.editable || r.managed) throw new Error('ما أقدر أحذف هذي الرتبة');
         if (r.id === CONFIG.ROYAL_ROLE_ID) throw new Error('هذي الرتبة الملكية، محمية من الحذف');
         const n = r.name; await r.delete('من لوحة التحكم'); note(req, `حذف رتبة: ${n}`);
+    }));
+
+    // ===== رتب الألوان (Color Roles) =====
+    const colorCfg = (g) => {
+        const cfg = colors.get(g.id);
+        const ch = cfg.channelId ? g.channels.cache.get(cfg.channelId) : null;
+        return {
+            channelId: cfg.channelId, channelName: ch ? ch.name : '', title: cfg.title, desc: cfg.desc,
+            messageId: cfg.messageId, roles: cfg.roles
+        };
+    };
+    const canManageRoles = (g) => !!(g.members.me && g.members.me.permissions.has('ManageRoles'));
+    api.get('/colors', h(async (g) => {
+        await g.channels.fetch();
+        const mine = new Set(colors.get(g.id).roles.map(r => r.id));
+        return {
+            config: colorCfg(g),
+            max: colors.MAX,
+            clear: colors.clearStatus(),
+            needPerm: !canManageRoles(g),
+            channels: [...g.channels.cache.values()].filter(c => !c.isThread() && c.isTextBased() && !c.isVoiceBased())
+                .sort((a, b) => a.rawPosition - b.rawPosition).map(c => ({ id: c.id, name: c.name })),
+            guildRoles: [...g.roles.cache.values()].filter(r => r.id !== g.id && !r.managed && !mine.has(r.id))
+                .sort((a, b) => b.position - a.position)
+                .map(r => ({ id: r.id, name: r.name, color: r.hexColor === '#000000' ? '#99aab5' : r.hexColor }))
+        };
+    }));
+    api.get('/colors/stats', h(async (g) => colors.stats(g, g.id)));
+    api.get('/colors/clear/status', h(async () => ({ clear: colors.clearStatus() })));
+    api.post('/colors/save', h(async (g, b, req) => {
+        if (b.channelId) {
+            const c = chan(g, b.channelId);
+            if (!c.isTextBased() || c.isVoiceBased()) throw new Error('اختر روم نصي');
+        }
+        colors.set(g.id, b);
+        note(req, 'حفظ إعدادات رتب الألوان');
+        return { config: colorCfg(g) };
+    }));
+    api.post('/colors/add', h(async (g, b, req) => {
+        const r = await colors.addRole(g, g.id, b);
+        note(req, `إضافة لون: ${clean(b.name) || (b.roleId ? 'ربط رتبة موجودة' : '')}`);
+        return { roles: r.roles };
+    }));
+    api.post('/colors/edit', h(async (g, b, req) => {
+        const r = await colors.editRole(g, g.id, b);
+        note(req, `تعديل لون${clean(b.name) ? ': ' + clean(b.name) : ''}`);
+        return { roles: r.roles };
+    }));
+    api.post('/colors/delete', h(async (g, b, req) => {
+        const r = await colors.delRole(g, g.id, b);
+        note(req, b.deleteRole === true ? 'حذف رتبة لون نهائياً' : 'إزالة لون من قائمة الألوان');
+        return { roles: r.roles, deleted: r.deleted };
+    }));
+    api.post('/colors/panel', h(async (g, b, req) => {
+        if (!canManageRoles(g)) throw new Error('البوت يحتاج صلاحية Manage Roles');
+        const r = await colors.sendPanel(g, g.id, { resend: b.resend === true });
+        note(req, r.edited ? 'تحديث بانل الألوان' : 'إرسال بانل الألوان');
+        return { messageId: r.messageId, channelId: r.channelId, edited: r.edited };
+    }));
+    api.post('/colors/clear', h(async (g, b, req) => {
+        if (b.confirm !== true) throw new Error('يحتاج تأكيد');
+        const j = colors.startClear(g, g.id, b);
+        note(req, 'بدء إزالة شاملة لألوان السيرفر');
+        return { clear: j };
     }));
 
     api.post('/announce', h(async (g, b, req) => {

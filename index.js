@@ -22,6 +22,7 @@ const giveaway = require('./giveaway');
 const selfroles = require('./selfroles');
 const jail = require('./jail');
 const trap = require('./trap');
+const colors = require('./colors');
 const mountPanel = require('./panel');
 
 // ====================================================================
@@ -284,11 +285,13 @@ async function onClientReady() {
         giveaway.reschedule(client);
         jail.init(client);
         trap.init(client, CONFIG);
+        colors.init(client, CONFIG);
     }
 
     // يخلي البوت يبيّن أونلاين دائماً (ولو أحد غيّر حالته لتختفي)
     setOnline();
     connectToVoice();
+    colors.ensure(client, CONFIG);   // نتأكد إن بانل الألوان موجود ومحدّث
 }
 client.on('clientReady', onClientReady);
 
@@ -312,6 +315,11 @@ client.on('interactionCreate', async (interaction) => {
         if (await tickets.handleButton(interaction, { getTier, CONFIG, pick })) return;
         if (await giveaway.handleButton(interaction)) return;
         if (await selfroles.handleButton(interaction)) return;
+        return;
+    }
+    // قائمة اختيار لون السيرفر (StringSelectMenu) — مستقلة عن باقي الأنظمة
+    if (interaction.isStringSelectMenu()) {
+        if (await colors.handleSelect(interaction)) return;
         return;
     }
     if (!interaction.isChatInputCommand()) return;
