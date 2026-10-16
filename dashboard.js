@@ -180,7 +180,7 @@ m.appendChild(el('div',{class:'mut',text:'أي حد يكتب برّوم معين
 function sel(first,list,val){var s=el('select',{},[opt('',first)].concat(list.map(function(x){return opt(x.id,x.name)})));s.value=val||'';return s}
 var en=el('input',{type:'checkbox'});en.checked=c.enabled;
 var tc=sel('اختر روم الفخ',d.channels,c.channelId);
-var ex=el('textarea',{placeholder:'آيدي كل عضو أو بوت مستثنى، كل وحد بسطر لحاله'});ex.value=(c.exemptIds||[]).join('\n');
+var ex=el('textarea',{placeholder:'آيدي كل عضو أو بوت مستثنى، كل وحد بسطر لحاله'});ex.value=(c.exemptIds||[]).join('\\n');
 function lab(t,k){return el('label',{class:'row',style:'margin:10px 0'},[k,el('span',{text:t})])}
 m.appendChild(card('الإعدادات',el('div',{},[lab('تفعيل روم الفخ',en),el('div',{class:'mut',text:'روم الفخ'}),tc,el('p'),el('div',{class:'mut',text:'آيديات مستثناة (بوتات ثانية عندك مثلاً)'}),ex])));
 m.appendChild(row([el('button',{class:'btn',text:'حفظ',on:{click:function(){api('trap/save',{enabled:en.checked,channelId:tc.value,exemptIdsText:ex.value}).then(function(){toast('انحفظ ✅')}).catch(function(e){toast(e.message,1)})}}})]))})};
