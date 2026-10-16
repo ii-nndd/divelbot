@@ -89,6 +89,11 @@ button.btn:active,button.b2:active,button.dn:active{transform:scale(.98)}
 .tgl input:disabled+.sl{opacity:.5;cursor:wait}
 .tag.on{background:#12351f;border-color:#1f9d55;color:#7fe0a5}
 .tag.off{background:#3a1418;border-color:#8b1f2a;color:#ff9aa5}
+.bar{height:10px;background:#22212c;border:1px solid #33314a;border-radius:20px;overflow:hidden}
+.bar>i{display:block;height:100%;background:linear-gradient(90deg,#ffb37a,#d3192a);transition:width .3s}
+.av{width:56px;height:56px;border-radius:50%;border:2px solid #b3121e;object-fit:cover}
+.ov{position:fixed;inset:0;background:rgba(5,4,8,.72);backdrop-filter:blur(3px);display:flex;align-items:flex-start;justify-content:center;z-index:60;padding:18px;overflow:auto}
+.ovc{background:linear-gradient(180deg,#181720,#151420);border:1px solid #2a2836;border-radius:16px;padding:18px;width:100%;max-width:620px;margin:auto;box-shadow:0 20px 50px rgba(0,0,0,.5)}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1f6f3f;padding:10px 18px;border-radius:10px;opacity:0;transition:.3s;pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.4)}
 #toast.err{background:#9b2020}#toast.on{opacity:1}a.btn{display:inline-block;text-decoration:none;padding:12px 20px;border-radius:10px}
 @media(max-width:800px){.app{flex-direction:column}.sb{position:fixed;bottom:0;left:0;right:0;z-index:5;width:auto;flex-direction:row;overflow-x:auto;padding:8px 8px calc(8px + env(safe-area-inset-bottom));border-left:0;border-top:1px solid #2a2836}.logo{display:none}.nav{white-space:nowrap;padding:10px 12px;font-size:14px}.main{padding:16px 14px calc(86px + env(safe-area-inset-bottom));padding-top:calc(16px + env(safe-area-inset-top))}}
@@ -295,39 +300,87 @@ d.leaderboard.forEach(function(x,i){
     el('span',{class:'tag',text:'#'+(i+1)}),
     x.avatar?el('img',{src:x.avatar,width:'30',height:'30',style:'border-radius:50%'}):null,
     el('span',{class:'nm',text:x.name}),
-    el('span',{class:'tag',text:'كتابي '+x.textXp}),
-    el('span',{class:'tag',text:'صوتي '+x.voiceXp}),
-    el('span',{class:'tag on',text:'إجمالي '+x.points+' (م'+x.totalLevel+')'}),
-    el('button',{class:'b2',text:'تعديل',on:{click:function(){find(x.id);q.value=x.id}}})
+    el('span',{class:'tag',text:'كتابي '+fmt(x.textXp)}),
+    el('span',{class:'tag',text:'صوتي '+fmt(x.voiceXp)}),
+    el('span',{class:'tag on',text:'م'+x.totalLevel+' • إجمالي '+fmt(x.points)}),
+    el('button',{class:'btn',text:'✏️ تعديل',on:{click:function(){load(x.id)}}})
   ]));
 });
 m.appendChild(lb);
+var my=el('div',{class:'card'});
+my.appendChild(el('div',{class:'cat',text:'حسابي 👤 — مستواي وترتيبي'}));
+my.appendChild(el('div',{class:'mut',text:'جاري تحميل مستواك...'}));
+m.appendChild(my);
+
 var ed=el('div',{class:'card'});
-ed.appendChild(el('div',{class:'cat',text:'تعديل رتبة/نقاط أي عضو'}));
+ed.appendChild(el('div',{class:'cat',text:'فتح ملف أي عضو'}));
 var q=el('input',{placeholder:'آي دي العضو أو اسمه',style:'flex:1;min-width:200px'});
-var out=el('div',{});
-ed.appendChild(row([q,el('button',{class:'btn',text:'بحث',on:{click:function(){find(q.value)}}})]));
+var out=el('div',{class:'mut',text:'ما فيه ملف مفتوح حالياً — اختر عضو من المتصدرين، أو اضغط «تعديل ملفي»، أو اكتب الآي دي هنا.',style:'margin-top:10px'});
+ed.appendChild(row([q,el('button',{class:'btn',text:'🔍 فتح الملف',on:{click:function(){load(q.value)}}})]));
 ed.appendChild(el('div',{class:'mut',text:'البحث بالاسم يحتاج تفعيل MEMBERS_INTENT، والآي دي يشتغل دايماً.',style:'margin:8px 0'}));
 ed.appendChild(out);
-function find(v){v=String(v||'').trim();if(!v)return toast('اكتب آي دي أو اسم',1);out.innerHTML='';out.appendChild(el('div',{class:'mut',text:'جاري البحث...'}));
-  api('levels/member?id='+encodeURIComponent(v)).then(function(r){out.innerHTML='';out.appendChild(editor(r))}).catch(function(e){out.innerHTML='';out.appendChild(el('div',{class:'mut',text:e.message}))})}
-function editor(r){var box=el('div',{});
-  box.appendChild(el('div',{class:'row'},[el('img',{src:r.member.avatar,width:'44',height:'44',style:'border-radius:50%'}),el('div',{},[el('div',{text:r.member.name}),el('div',{class:'mut',text:r.member.id})])]));
-  var p=r.profile;
-  var pi=num(p.points),ti=num(p.textXp),vi=num(p.voiceXp);
-  box.appendChild(el('div',{class:'row',style:'margin:10px 0'},[lab('الإجمالي XP'),pi,lab('كتابي XP'),ti,lab('صوتي XP'),vi]));
-  box.appendChild(el('div',{class:'row'},[
-    el('button',{class:'btn',text:'حفظ القيم',on:{click:function(){go(api('levels/edit',{id:r.member.id,points:Number(pi.value),textXp:Number(ti.value),voiceXp:Number(vi.value)}),'انحفظ ✅','levels')}}}),
-    el('span',{class:'tag',text:'الترتيب #'+p.rank}),el('span',{class:'tag',text:'مستوى إجمالي '+p.totalLevel}),el('span',{class:'tag',text:'كتابي '+p.textLevel}),el('span',{class:'tag',text:'صوتي '+p.voiceLevel})
-  ]));
-  var amt=num(100);
-  box.appendChild(el('div',{class:'row',style:'margin-top:8px'},[amt,
-    el('button',{class:'b2',text:'➕ إضافة XP',on:{click:function(){go(api('levels/edit',{id:r.member.id,add:Math.abs(Number(amt.value))}),'تم ✅','levels')}}}),
-    el('button',{class:'b2',text:'➖ خصم XP',on:{click:function(){go(api('levels/edit',{id:r.member.id,add:-Math.abs(Number(amt.value))}),'تم ✅','levels')}}})
-  ]));
-  return box;
-}
 m.appendChild(ed);
+
+function fmt(n){n=Number(n||0);return n.toLocaleString('en-US')}
+function xpBar(cur,lo,hi){var pc=hi>lo?Math.round(((cur-lo)/(hi-lo))*100):100;pc=Math.max(0,Math.min(100,pc));return el('div',{class:'bar'},[el('i',{style:'width:'+pc+'%'})])}
+function head(r,p){return el('div',{class:'row'},[
+  el('img',{class:'av',src:r.member.avatar}),
+  el('div',{style:'flex:1;min-width:150px'},[el('div',{style:'font-weight:700;font-size:17px',text:r.member.name}),el('div',{class:'mut',text:r.member.id+' • الترتيب #'+(p.rank||1)})]),
+  el('span',{class:'tag on',text:'المستوى '+(p.totalLevel||0)}),
+  el('span',{class:'tag',text:'كتابي م'+(p.textLevel||0)}),
+  el('span',{class:'tag',text:'صوتي م'+(p.voiceLevel||0)})
+])}
+function bars(p){var w=el('div',{});var cur=Number(p.points||0),lo=Number(p.lo||0),hi=Number(p.hi||0);
+  w.appendChild(el('div',{class:'mut',style:'margin:12px 0 5px',text:'الإجمالي '+fmt(cur)+' XP • التقدم للمستوى '+((p.totalLevel||0)+1)+': '+fmt(cur)+' / '+fmt(hi)+' XP — باقي '+fmt(Math.max(0,hi-cur))}));
+  w.appendChild(xpBar(cur,lo,hi));
+  w.appendChild(el('div',{class:'mut',style:'margin:12px 0 5px',text:'الخبرة الكتابية '+fmt(p.textXp)+' XP (مستوى '+(p.textLevel||0)+')'}));
+  w.appendChild(xpBar(Number(p.textXp||0),Number(p.textLo||0),Number(p.textHi||0)));
+  w.appendChild(el('div',{class:'mut',style:'margin:12px 0 5px',text:'الخبرة الصوتية '+fmt(p.voiceXp)+' XP (مستوى '+(p.voiceLevel||0)+')'}));
+  w.appendChild(xpBar(Number(p.voiceXp||0),Number(p.voiceLo||0),Number(p.voiceHi||0)));
+  return w}
+function editor(r){var p=r.profile||{};var box=el('div',{});
+  box.appendChild(el('div',{class:'cat',text:'ملف العضو'}));
+  box.appendChild(head(r,p));box.appendChild(bars(p));
+  var pi=num(p.points||0),ti=num(p.textXp||0),vi=num(p.voiceXp||0),amt=num(100);
+  box.appendChild(el('div',{class:'row',style:'margin-top:14px'},[lab('الإجمالي XP'),pi,lab('كتابي XP'),ti,lab('صوتي XP'),vi]));
+  box.appendChild(el('div',{class:'row',style:'margin-top:10px'},[
+    el('button',{class:'btn',text:'💾 حفظ القيم',on:{click:function(){run(api('levels/edit',{id:r.member.id,points:Number(pi.value),textXp:Number(ti.value),voiceXp:Number(vi.value)}),'انحفظ ✅')}}}),
+    el('button',{class:'b2',text:'↻ تحديث البيانات',on:{click:function(){load(r.member.id)}}})
+  ]));
+  box.appendChild(el('div',{class:'row',style:'margin-top:10px'},[amt,
+    el('button',{class:'b2',text:'➕ إضافة XP',on:{click:function(){run(api('levels/edit',{id:r.member.id,add:Math.abs(Number(amt.value))}),'تم ✅')}}}),
+    el('button',{class:'b2',text:'➖ خصم XP',on:{click:function(){run(api('levels/edit',{id:r.member.id,add:-Math.abs(Number(amt.value))}),'تم ✅')}}})
+  ]));
+  box.appendChild(el('div',{class:'mut',style:'margin-top:12px',text:'الإجمالي = كتابي + صوتي + مكافآت الألعاب. الحفظ ينفذ مباشرة في قاعدة البيانات.'}));
+  return box}
+var modal=null;
+function closeModal(){if(modal){modal.remove();modal=null}}
+function openModal(r){closeModal();
+  var box=el('div',{class:'ovc'},[
+    el('div',{class:'row'},[el('div',{class:'cat',style:'flex:1;margin:0',text:'تعديل XP وملف العضو'}),el('button',{class:'b2',text:'✕ إغلاق',on:{click:function(){closeModal()}}})]),
+    editor(r)
+  ]);
+  modal=el('div',{class:'ov'},[box]);
+  modal.addEventListener('click',function(e){if(e.target===modal)closeModal()});
+  document.body.appendChild(modal);
+  out.textContent='آخر ملف مفتوح: '+r.member.name+' — لو ما ظهرت النافذة، اضغط «فتح الملف» مرة ثانية.';
+}
+function run(fn,msg){fn.then(function(){toast(msg||'تم ✅');closeModal();show('levels')}).catch(function(e){toast(e.message,1)})}
+function load(v){v=String(v||'').trim();toast('جاري فتح الملف...');
+  api(v?'levels/member?id='+encodeURIComponent(v):'levels/me').then(function(r){openModal(r)}).catch(function(e){toast(e.message,1)})}
+
+api('levels/me').then(function(r){var p=r.profile||{};my.innerHTML='';
+  my.appendChild(el('div',{class:'cat',text:'حسابي 👤 — مستواي وترتيبي'}));
+  my.appendChild(el('div',{class:'row'},[
+    el('img',{class:'av',src:r.member.avatar}),
+    el('div',{style:'flex:1;min-width:150px'},[el('div',{style:'font-weight:700;font-size:17px',text:r.member.name}),el('div',{class:'mut',text:'ترتيبك #'+(p.rank||1)+' • إجمالي '+fmt(p.points)+' XP'})]),
+    el('span',{class:'tag on',text:'مستواك '+(p.totalLevel||0)}),
+    el('span',{class:'tag',text:'كتابي م'+(p.textLevel||0)}),
+    el('span',{class:'tag',text:'صوتي م'+(p.voiceLevel||0)}),
+    el('button',{class:'btn',text:'✏️ تعديل ملفي',on:{click:function(){openModal(r)}}})
+  ]));
+  my.appendChild(bars(p));
+}).catch(function(e){my.innerHTML='';my.appendChild(el('div',{class:'cat',text:'حسابي 👤'}));my.appendChild(el('div',{class:'mut',text:'تعذر تحميل مستواك: '+e.message}))});
 return Promise.resolve()})};
 function boot(){api('me').then(function(d){var r=$('root');
 if(!d.enabled){r.appendChild(el('div',{class:'main'},[card('',el('div',{text:'اللوحة غير مفعلة: ناقص DISCORD_CLIENT_ID أو DISCORD_CLIENT_SECRET أو SESSION_SECRET في Render'}))]));return}
@@ -737,8 +790,20 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         }
         if (!m) throw new Error('ما لقيت العضو (جرّب الآي دي)');
         return {
-            member: { id: m.id, name: m.displayName, avatar: m.displayAvatarURL({ size: 64 }) },
+            member: { id: m.id, name: m.displayName, avatar: m.displayAvatarURL({ size: 128 }) },
             profile: await points.profile(g.id, m.id)
+        };
+    }));
+
+    // ملف حساب المستخدم المسجّل باللوحة نفسه (لزر "حسابي") — ما يحتاج بحث ولا MEMBERS_INTENT
+    api.get('/levels/me', h(async (g, b, req) => {
+        const id = req.user.id;
+        const m = await g.members.fetch(id).catch(() => null);
+        const u = m ? m.user : await g.client.users.fetch(id).catch(() => null);
+        if (!u) throw new Error('ما لقيت حسابك في السيرفر');
+        return {
+            member: { id: u.id, name: (m && m.displayName) || u.globalName || u.username, avatar: u.displayAvatarURL({ size: 128 }) },
+            profile: await points.profile(g.id, u.id)
         };
     }));
     api.post('/levels/edit', h(async (g, b, req) => {
