@@ -50,7 +50,10 @@ const CONFIG = {
 // ====================================================================
 const app = express();
 const PORT = process.env.PORT || 3000;
-app.get('/', (req, res) => res.send('Voice Keeper Bot is running 24/7!'));
+// الجذر يحوّل مباشرة للوحة التحكم، عشان أول ما تفتح رابط الموقع يطلع لك الداشبورد
+app.get('/', (req, res) => res.redirect('/dashboard'));
+// نقطة فحص بسيطة للاستضافة (Render) لو احتجتها
+app.get('/health', (req, res) => res.send('Voice Keeper Bot is running 24/7!'));
 mountPanel(app, express, R);
 app.listen(PORT, () => console.log(`🌐 Web server on port ${PORT}`));
 
