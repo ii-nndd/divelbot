@@ -98,7 +98,7 @@ curl.exe -s -w "`nHTTP:%{http_code}`n" https://divelbot.onrender.com/dashboard/a
 - إضافة بطاقة **«حسابي 👤»** تُحمّل مستوى المستخدم المسجّل تلقائياً.
 - إضافة مسار **`GET /dashboard/api/levels/me`**.
 - إضافة `.gitignore` و`.env.example` و`README.md`، وتهيئة Git وربطه بمستودع GitHub.
-- آخر Commit منشور: `c143174` على `main`.
+- آخر Commits منشورة على `main`: `c143174` (إصلاح صفحة المستويات) ثم `f523fc4` (إضافة ملف السياق هذا).
 
 **لم يُنفّذ بعد (عند الطلب):**
 - توحيد `"name"` في `package.json` من `voice-keeper-bot` إلى `nova`.
