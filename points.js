@@ -26,12 +26,14 @@ async function init() {
     }
 }
 
-// يضيف (أو يخصم) نقاط ويرجع بيانات العضو بعد التعديل
-async function add(guildId, userId, amount) {
+const ready = () => !!users;
+
+// إضافة/خصم قيم متعددة ويرجع بيانات العضو بعد التعديل (المجموع points = كتابي + صوتي + مكافآت)
+async function bump(guildId, userId, inc) {
     if (!users) return null;
     const doc = await users.findOneAndUpdate(
         { guildId, userId },
-        { $inc: { points: amount }, $setOnInsert: { createdAt: new Date() } },
+        { $inc: inc, $setOnInsert: { createdAt: new Date(), textXp: 0, voiceXp: 0 } },
         { upsert: true, returnDocument: 'after' }
     );
     if (doc && doc.points < 0) {
@@ -41,22 +43,87 @@ async function add(guildId, userId, amount) {
     return doc;
 }
 
-// نقاط الكلام في الشات (كل 60 ثانية كحد أقصى لكل عضو)
-async function onMessage(message, tier) {
-    if (!users || message.content.length < 3) return;
-    const key = `${message.guild.id}:${message.author.id}`;
-    const now = Date.now();
-    if (now - (chatCd.get(key) || 0) < 60_000) return;
-    chatCd.set(key, now);
+// مكافآت (ألعاب/إدارة): تزيد المجموع فقط بدون ما تنسب لمصدر
+const add = (guildId, userId, amount) => bump(guildId, userId, { points: amount });
+// خبرة التفاعل الكتابي
+const addText = (guildId, userId, amount) => bump(guildId, userId, { points: amount, textXp: amount });
+// خبرة التفاعل الصوتي (وقت التواجد بالفويس)
+const addVoice = (guildId, userId, amount) => bump(guildId, userId, { points: amount, voiceXp: amount });
 
-    const gain = rand(5, 15);
-    const doc = await add(message.guild.id, message.author.id, gain);
-    if (!doc) return;
-    const before = levelOf(doc.points - gain), after = levelOf(doc.points);
-    if (after > before) {
-        const royal = tier === 'arthur' ? ' يا مولاي ارثر 👑' : tier === 'ida' ? ' يا ملكة إيدا 🌸' : '';
-        message.channel.send(`🎉 مبروك ${message.author}${royal}! وصلت **المستوى ${after}**`).catch(() => {});
+// جلب بيانات عضو (يرجع أصفار لو ما عنده سجل)
+async function get(guildId, userId) {
+    if (!users) return { points: 0, textXp: 0, voiceXp: 0 };
+    const d = (await users.findOne({ guildId, userId })) || {};
+    return { points: d.points || 0, textXp: d.textXp || 0, voiceXp: d.voiceXp || 0 };
+}
+
+// تعديل مباشر (من لوحة التحكم): قيم مطلقة
+async function setXp(guildId, userId, patch) {
+    if (!users) return null;
+    const set = {};
+    for (const field of ['points', 'textXp', 'voiceXp']) {
+        const v = Number(patch[field]);
+        if (Number.isFinite(v)) set[field] = Math.max(0, Math.floor(v));
     }
+    if (!Object.keys(set).length) return null;
+    return users.findOneAndUpdate(
+        { guildId, userId },
+        { $set: set, $setOnInsert: { createdAt: new Date() } },
+        { upsert: true, returnDocument: 'after' }
+    );
+}
+
+// ترتيب العضو بالسيرفر (حسب المجموع)
+async function rankOf(guildId, pointsVal) {
+    if (!users) return 1;
+    return (await users.countDocuments({ guildId, points: { $gt: pointsVal } })) + 1;
+}
+
+// قائمة المتصدرين (تنحسب من المجموع)
+async function top(guildId, limit = 25) {
+    if (!users) return [];
+    return users.find({ guildId, points: { $gt: 0 } }).sort({ points: -1 }).limit(Math.min(100, limit)).toArray();
+}
+
+// ملف الرتبة الكامل: كتابي + صوتي + إجمالي + الترتيب + حدود المستويات
+async function profile(guildId, userId) {
+    const d = await get(guildId, userId);
+    const totalLevel = levelOf(d.points), textLevel = levelOf(d.textXp), voiceLevel = levelOf(d.voiceXp);
+    const rank = await rankOf(guildId, d.points);
+    return {
+        ...d, rank, totalLevel, textLevel, voiceLevel,
+        lo: needFor(totalLevel), hi: needFor(totalLevel + 1),
+        textLo: needFor(textLevel), textHi: needFor(textLevel + 1),
+        voiceLo: needFor(voiceLevel), voiceHi: needFor(voiceLevel + 1)
+    };
+}
+
+// يرسل بطاقة الرتبة (صورة احترافية) مع بديل نصي لو الرسم معطل
+async function sendRank(target, user, guildId) {
+    const p = await profile(guildId, user.id);
+    if (cards.available()) {
+        try {
+            const png = await cards.rankCard({
+                avatarURL: user.displayAvatarURL({ extension: 'png', size: 256 }),
+                username: user.username, displayName: user.globalName || user.username,
+                totalXp: p.points, totalLevel: p.totalLevel, lo: p.lo, hi: p.hi,
+                textXp: p.textXp, textLevel: p.textLevel,
+                voiceXp: p.voiceXp, voiceLevel: p.voiceLevel, rank: p.rank
+            });
+            return target.reply({ files: [new AttachmentBuilder(png, { name: 'rank.png' })] });
+        } catch (err) { console.error('❌ فشل رسم بطاقة الرتبة:', err.message); }
+    }
+    const filled = Math.round(((p.points - p.lo) / Math.max(1, p.hi - p.lo)) * 10);
+    const e = new EmbedBuilder().setColor(0xb3121e).setTitle(user.username)
+        .setThumbnail(user.displayAvatarURL())
+        .addFields(
+            { name: 'كتابي', value: `${p.textXp} (م${p.textLevel})`, inline: true },
+            { name: 'صوتي', value: `${p.voiceXp} (م${p.voiceLevel})`, inline: true },
+            { name: 'الإجمالي', value: `${p.points} (م${p.totalLevel})`, inline: true },
+            { name: 'الترتيب', value: `#${p.rank}`, inline: true }
+        )
+        .setDescription(`${'█'.repeat(filled)}${'░'.repeat(10 - filled)}  ${p.points}/${p.hi} XP`);
+    return target.reply({ embeds: [e] });
 }
 
 const commands = [
@@ -80,41 +147,21 @@ async function handle(i, ctx) {
     try {
         if (i.commandName === 'نقاطي') {
             const u = i.options.getUser('عضو') || i.user;
-            const doc = (await users.findOne({ guildId: g, userId: u.id })) || { points: 0 };
-            const lvl = levelOf(doc.points), lo = needFor(lvl), hi = needFor(lvl + 1);
-            const rank = (await users.countDocuments({ guildId: g, points: { $gt: doc.points } })) + 1;
-            if (cards.available()) {
-                try {
-                    const png = await cards.rankCard({
-                        avatarURL: u.displayAvatarURL({ extension: 'png', size: 128 }),
-                        username: u.username, points: doc.points, level: lvl, lo, hi, rank
-                    });
-                    return i.reply({ files: [new AttachmentBuilder(png, { name: 'rank.png' })] });
-                } catch (err) { console.error('❌ فشل رسم بطاقة النقاط:', err.message); }
-            }
-            const filled = Math.round(((doc.points - lo) / (hi - lo)) * 10);
-            const e = new EmbedBuilder().setColor(0xb3121e).setTitle(u.username)
-                .setThumbnail(u.displayAvatarURL())
-                .addFields(
-                    { name: 'النقاط', value: String(doc.points), inline: true },
-                    { name: 'المستوى', value: String(lvl), inline: true },
-                    { name: 'الترتيب', value: `#${rank}`, inline: true }
-                )
-                .setDescription(`${'█'.repeat(filled)}${'░'.repeat(10 - filled)}  ${doc.points}/${hi}`);
-            await i.reply({ embeds: [e] });
+            await sendRank(i, u, g);
         } else if (i.commandName === 'المتصدرين') {
-            const top = await users.find({ guildId: g, points: { $gt: 0 } }).sort({ points: -1 }).limit(10).toArray();
-            if (!top.length) { await i.reply('ما أحد عنده نقاط للحين!'); return true; }
+            const top10 = await top(g, 10);
+            if (!top10.length) { await i.reply('ما أحد عنده نقاط للحين!'); return true; }
             if (cards.available()) {
                 try {
                     await i.deferReply();
                     const entries = [];
-                    for (const d of top) {
+                    for (const d of top10) {
                         const user = await i.client.users.fetch(d.userId).catch(() => null);
                         entries.push({
                             name: user ? user.username : d.userId,
                             avatarURL: user ? user.displayAvatarURL({ extension: 'png', size: 64 }) : null,
-                            points: d.points
+                            points: d.points || 0,
+                            totalLevel: levelOf(d.points || 0)
                         });
                     }
                     const png = await cards.leaderboardCard(entries);
@@ -122,7 +169,7 @@ async function handle(i, ctx) {
                 } catch (err) { console.error('❌ فشل رسم بطاقة المتصدرين:', err.message); }
             }
             const medals = ['🥇', '🥈', '🥉'];
-            const lines = top.map((d, k) => `${medals[k] || `**${k + 1}.**`} <@${d.userId}> — ${d.points} (مستوى ${levelOf(d.points)})`);
+            const lines = top10.map((d, k) => `${medals[k] || `**${k + 1}.**`} <@${d.userId}> — ${d.points} (مستوى ${levelOf(d.points)})`);
             const e = new EmbedBuilder().setColor(0xb3121e).setTitle('🏆 المتصدرين')
                 .setDescription(lines.join('\n'));
             await (i.deferred ? i.editReply({ embeds: [e] }) : i.reply({ embeds: [e] }));
@@ -145,4 +192,9 @@ async function handle(i, ctx) {
     return true;
 }
 
-module.exports = { init, add, onMessage, commands, handle, levelOf };
+module.exports = {
+    init, commands, handle,
+    // بيانات ومستويات
+    ready, get, add, addText, addVoice, setXp, rankOf, top, profile, sendRank,
+    levelOf, needFor
+};

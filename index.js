@@ -15,6 +15,7 @@ const tickets = require('./tickets');
 const admin = require('./admin');
 const nlcommands = require('./nlcommands');
 const points = require('./points');
+const levels = require('./levels');
 const games = require('./games');
 const economy = require('./economy');
 const giveaway = require('./giveaway');
@@ -252,7 +253,7 @@ const commands = [
     new SlashCommandBuilder().setName('كرة').setDescription('كرة الحظ، اسأل سؤال')
         .addStringOption(o => o.setName('سؤال').setDescription('سؤالك').setRequired(true)),
     new SlashCommandBuilder().setName('مساعدة').setDescription('قائمة الأوامر')
-].map(c => c.toJSON()).concat(admin.commands, points.commands, games.commands, tickets.commands, economy.commands, giveaway.commands, selfroles.commands);
+].map(c => c.toJSON()).concat(admin.commands, points.commands, levels.commands, games.commands, tickets.commands, economy.commands, giveaway.commands, selfroles.commands);
 
 // ====================================================================
 // 7. تشغيل البوت
@@ -269,6 +270,7 @@ client.once('clientReady', async () => {
     await store.init();
     R.reload();
     points.init();
+    levels.init(client, CONFIG);
     giveaway.reschedule(client);
     jail.init(client);
     trap.init(client, CONFIG);
@@ -298,6 +300,7 @@ client.on('interactionCreate', async (interaction) => {
     if (await tickets.handle(interaction, { getTier, CONFIG, pick })) return;
     if (await games.handle(interaction, { getTier, CONFIG, pick })) return;
     if (await points.handle(interaction, { getTier, CONFIG, pick })) return;
+    if (await levels.handle(interaction, { getTier, CONFIG, pick })) return;
     if (await admin.handle(interaction, { getTier, CONFIG, pick })) return;
     if (await economy.handle(interaction, { getTier, CONFIG, pick })) return;
     if (await giveaway.handle(interaction, { getTier, CONFIG, pick })) return;
@@ -415,11 +418,11 @@ client.on('interactionCreate', async (interaction) => {
                     .addFields(
                         { name: '👑 ملكية', value: '`/تعال` `/اطلع` `/تنبيه` `/شعر` `/اكل`' },
                         { name: '🎮 ترفيه وألعاب', value: '`/نكتة` `/نرد` `/عملة` `/اختار` `/حجر` `/تخمين` `/حب` `/كرة` `/سرعة` `/رياضيات` `/مبعثرة` `/اعلام`' },
-                        { name: '💰 اقتصاد ونقاط', value: '`/نقاطي` `/المتصدرين` `/يومي` `/رصيد` `/تحويل` `/المتجر` `/شراء`' },
+                        { name: '💰 اقتصاد ونقاط', value: '`/نقاطي` `/رتبة` `/rank` `/المتصدرين` `/يومي` `/رصيد` `/تحويل` `/المتجر` `/شراء`' },
                         { name: '🎉 فعاليات', value: '`/قرعة_بدء` `/قرعة_انهاء` `/رتب_لوحة`' },
                         { name: '📊 عام', value: '`/حالة` `/بينج` `/فلوس` `/سيرفر`' },
                         { name: '🛡️ إدارة', value: '`/طرد` `/حظر` `/فك_حظر` `/ميوت` `/فك_ميوت` `/مسح` `/قفل` `/فتح` `/بطيء` `/رتبة_اضافة` `/رتبة_ازالة` `/لقب` `/صوت` `/نقل` `/اعلان` `/تحذير` `/تحذيرات` `/معلومات_عضو` `/معلومات_سيرفر` `/متجر_اضافة` `/متجر_حذف`' },
-                        { name: '💬 بالكلام', value: 'نادني: **يا عبد نكتة** / **يا عبد سرعة** / **يا عبد نقاطي** / **يا عبد نرد 20**، أو رد على رسالتي.\n🛡️ وحتى الإدارة بالكلام: **يا عبد طرد @فلان يسب الناس** / **يا عبد ميوت @فلان 10 دقايق مزعج** / **يا عبد مسح 20** / **يا عبد باند @فلان**.\n🎛️ والتحكم بالبوت: **يا عبد فك البوت** (يفك نفسه من الروم) / **يا عبد شغل البوت** (يرجع للتفاعل).' }
+                        { name: '💬 بالكلام', value: 'نادني: **يا عبد نكتة** / **يا عبد سرعة** / **يا عبد رتبتي** / **يا عبد نرد 20**، أو رد على رسالتي. وأمر سريع: **!rank** أو **!رتبة**.\n🛡️ وحتى الإدارة بالكلام: **يا عبد طرد @فلان يسب الناس** / **يا عبد ميوت @فلان 10 دقايق مزعج** / **يا عبد مسح 20** / **يا عبد باند @فلان**.\n🎛️ والتحكم بالبوت: **يا عبد فك البوت** (يفك نفسه من الروم) / **يا عبد شغل البوت** (يرجع للتفاعل).' }
                     );
                 return interaction.reply({ embeds: [helpEmbed] });
             }
@@ -453,12 +456,17 @@ function tokenize(text) {
 const nz = (t) => t.replace(/[\u064B-\u0652\u0640]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').toLowerCase();
 
 // يحوّل رسالة عادية لشكل شبيه بالسلاش عشان نستخدم نفس كود الألعاب والنقاط
-const asInteraction = (message, name) => ({
-    commandName: name, client, channel: message.channel, guild: message.guild,
-    user: message.author, member: message.member, replied: false, deferred: false,
-    options: { getUser: () => null, getInteger: () => null, getString: () => null },
-    reply: (o) => message.reply(typeof o === 'string' ? o : { ...o, flags: undefined })
-});
+const asInteraction = (message, name) => {
+    const it = {
+        commandName: name, client, channel: message.channel, guild: message.guild,
+        user: message.author, member: message.member, replied: false, deferred: false,
+        options: { getUser: () => null, getInteger: () => null, getString: () => null },
+        reply: (o) => { it.replied = true; return message.reply(typeof o === 'string' ? o : { ...o, flags: undefined }); },
+        deferReply: async () => { it.deferred = true; },
+        editReply: (o) => message.reply(typeof o === 'string' ? o : { ...o, flags: undefined })
+    };
+    return it;
+};
 
 const TEXT_GAMES = { 'سرعه': 'سرعة', 'رياضيات': 'رياضيات', 'مبعثره': 'مبعثرة', 'اعلام': 'اعلام' };
 
@@ -509,10 +517,19 @@ client.on('messageCreate', async (message) => {
     // ملاحظة: روم الفخ (trap.js) له معالج مستقل، فالحظر التلقائي ما يتأثر بهذا السطر أبداً.
     if (!botcontrol.canInteract(message.guild.id, message.channel.id)) return;
 
-    points.onMessage(message, getTier(message.author.id, message.member)).catch(() => {});
+    levels.onMessage(message).catch(() => {});
 
     const content = message.content.trim();
     if (!content) return;
+
+    // أمر بادئة تعجب: !rank / !رتبة / !متصدرين / !نقاطي (بدون الحاجة لمناداة البوت)
+    const bang = content.match(/^!\s*(rank|رتبة|رتبه|مستوى|متصدرين|المتصدرين|top|نقاطي)\s*$/i);
+    if (bang) {
+        const key = bang[1].toLowerCase();
+        if (key === 'rank' || key === 'رتبة' || key === 'رتبه' || key === 'مستوى') return void levels.handle(asInteraction(message, 'رتبة'), { getTier, CONFIG, pick }).catch(() => {});
+        if (key === 'نقاطي') return void points.handle(asInteraction(message, 'نقاطي'), { getTier, CONFIG, pick }).catch(() => {});
+        return void points.handle(asInteraction(message, 'المتصدرين'), { getTier, CONFIG, pick }).catch(() => {});
+    }
 
     const tokens = tokenize(content);
     if (!(await isCalled(message, tokens, content))) return;   // بدون نداء: ما يرد أبداً
@@ -572,6 +589,7 @@ client.on('messageCreate', async (message) => {
     }
     if (w('نقاطي')) return points.handle(asInteraction(message, 'نقاطي'), ctx);
     if (w('المتصدرين')) return points.handle(asInteraction(message, 'المتصدرين'), ctx);
+    if (w('رتبتي', 'رتبه', 'مستواي', 'مستوي')) return levels.handle(asInteraction(message, 'رتبة'), ctx);
 
     // لو فيه لعبة شغالة بالروم، ردك عليها (الجواب) ما يعتبر كلام مع البوت
     if (games.isActive(message.channel.id)) return;

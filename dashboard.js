@@ -10,6 +10,7 @@ const tickets = require('./tickets');
 const jail = require('./jail');
 const trap = require('./trap');
 const points = require('./points');
+const levels = require('./levels');
 const botcontrol = require('./botcontrol');
 
 const BASE = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'https://divelbot.onrender.com';
@@ -104,7 +105,7 @@ function go(fn,msg,page){fn.then(function(){toast(msg||'تم ✅');if(page)show(
 var NOVA_MARK_SVG='<svg width="22" height="22" viewBox="0 0 100 100" style="vertical-align:-5px;margin-left:8px"><defs><radialGradient id="ngc" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff6e8"/><stop offset="45%" stop-color="#ff8a3d"/><stop offset="100%" stop-color="#b3121e"/></radialGradient></defs><g fill="url(#ngc)"><polygon points="50,6 58,42 94,50 58,58 50,94 42,58 6,50 42,42"/><polygon points="50,24 54,42 50,50 46,42" opacity="0"/></g><circle cx="50" cy="50" r="13" fill="url(#ngc)"/></svg>';
 function sw(on,fn){var i=el('input',{type:'checkbox'});i.checked=!!on;i.addEventListener('change',function(){fn(i.checked)});return el('span',{class:'tgl'},[i,el('span',{class:'sl'})])}
 var pages={},cur='overview';
-var NAV=[['overview','نظرة عامة'],['bot','التحكم بالبوت'],['channels','الرومات'],['roles','الرتب'],['members','الأعضاء'],['welcome','الترحيب'],['tickets','التذاكر'],['jail','السجن'],['trap','روم الفخ'],['bans','المحظورين'],['announce','الإعلانات'],['log','السجل']];
+var NAV=[['overview','نظرة عامة'],['bot','التحكم بالبوت'],['channels','الرومات'],['roles','الرتب'],['members','الأعضاء'],['levels','المستويات'],['welcome','الترحيب'],['tickets','التذاكر'],['jail','السجن'],['trap','روم الفخ'],['bans','المحظورين'],['announce','الإعلانات'],['log','السجل']];
 function show(p){cur=p;var m=$('main');m.innerHTML='';[].forEach.call(document.querySelectorAll('.nav'),function(n){n.className='nav'+(n.dataset.p===p?' on':'')});pages[p](m).catch(function(e){toast(e.message,1)})}
 pages.overview=function(m){return api('overview').then(function(d){m.appendChild(el('h1',{text:d.name}));m.appendChild(el('div',{class:'mut',text:'تحكم كامل بالسيرفر، والتعديل ينفذ فور الضغط'}));
 var s=el('div',{class:'stats'});[['الأعضاء',d.members],['الرومات',d.channels],['الرتب',d.roles]].forEach(function(x){s.appendChild(el('div',{class:'card'},[el('div',{class:'mut',text:x[0]}),el('div',{class:'big',text:String(x[1])})]))});m.appendChild(s)})};
@@ -267,6 +268,67 @@ c.appendChild(el('p'));c.appendChild(row([rs,el('button',{class:'b2',text:'إض�
 c.appendChild(el('p'));c.appendChild(row([el('button',{class:'dn',text:'طرد',on:{click:function(){if(confirm('تأكيد طرد '+x.name+' ؟'))act('kick',{confirm:true},'تم الطرد',true)}}}),el('button',{class:'dn',text:'حظر',on:{click:function(){if(confirm('تأكيد حظر '+x.name+' ؟'))act('ban',{confirm:true},'تم الحظر',true)}}})]));return c}
 m.appendChild(card('بحث',row([q,el('button',{class:'btn',text:'بحث',on:{click:function(){if(q.value.trim())find(q.value.trim())}}})])));
 m.appendChild(el('div',{class:'mut',text:'الآي دي يشتغل دايماً. البحث بالاسم يحتاج تفعيل MEMBERS_INTENT.',style:'margin-bottom:12px'}));m.appendChild(out);return Promise.resolve()};
+pages.levels=function(m){return api('levels').then(function(d){var c=d.config;
+m.appendChild(el('h1',{text:'المستويات والرتب'}));
+m.appendChild(el('div',{class:'mut',text:'تحكم بمعدلات كسب الخبرة (XP). المجموع = كتابي + صوتي + مكافآت الألعاب، وبطاقة /رتبة تنعرض كصورة مع الصورة الشخصية وشريط التقدم وترتيبك بالسيرفر.'+(d.dbReady?'':' ⚠️ قاعدة البيانات غير متصلة حالياً.')}));
+var lab=function(t){return el('div',{class:'mut',text:t})};
+function num(v,step){return el('input',{type:'number',value:String(v),step:step||'1',style:'width:110px'})}
+var tE=sw(c.textEnabled,function(){ }),tMin=num(c.textMin),tMax=num(c.textMax),tCd=num(c.textCd);
+var vE=sw(c.voiceEnabled,function(){ }),vMin=num(c.voiceMin),vMax=num(c.voiceMax),vTick=num(c.voiceTick),vMm=num(c.voiceMinMembers);
+var an=sw(c.announce,function(){ });
+function getBool(node){return node.querySelector('input').checked}
+function body(){return{textEnabled:getBool(tE),textMin:tMin.value,textMax:tMax.value,textCd:tCd.value,voiceEnabled:getBool(vE),voiceMin:vMin.value,voiceMax:vMax.value,voiceTick:vTick.value,voiceMinMembers:vMm.value,announce:getBool(an)}}
+var c1=el('div',{class:'card'});
+c1.appendChild(el('div',{class:'cat',text:'معدلات الخبرة'}));
+c1.appendChild(el('div',{class:'item'},[el('span',{class:'nm',text:'الخبرة الكتابية (الرسائل)'}),tE]));
+c1.appendChild(el('div',{class:'row',style:'margin:4px 0 12px'},[lab('أقل خبرة'),tMin,lab('أكثر خبرة'),tMax,lab('كل كم ثانية'),tCd]));
+c1.appendChild(el('div',{class:'item'},[el('span',{class:'nm',text:'الخبرة الصوتية (وقت الفويس)'}),vE]));
+c1.appendChild(el('div',{class:'row',style:'margin:4px 0 12px'},[lab('أقل خبرة/دورة'),vMin,lab('أكثر خبرة'),vMax,lab('كل كم ثانية'),vTick,lab('أقل عدد أعضاء بالروم'),vMm]));
+c1.appendChild(el('div',{class:'item'},[el('span',{class:'nm',text:'إعلان الترقية بالشات'}),an]));
+c1.appendChild(el('div',{class:'row',style:'margin-top:10px'},[el('button',{class:'btn',text:'حفظ المعدلات',on:{click:function(){go(api('levels/save',body()),'انحفظ ✅',null)}}})]));
+m.appendChild(c1);
+var lb=el('div',{class:'card'});
+lb.appendChild(el('div',{class:'cat',text:'المتصدرين (أعلى 25)'}));
+if(!d.leaderboard.length)lb.appendChild(el('div',{class:'mut',text:'ما فيه أحد عنده XP للحين.'}));
+d.leaderboard.forEach(function(x,i){
+  lb.appendChild(el('div',{class:'item'},[
+    el('span',{class:'tag',text:'#'+(i+1)}),
+    x.avatar?el('img',{src:x.avatar,width:'30',height:'30',style:'border-radius:50%'}):null,
+    el('span',{class:'nm',text:x.name}),
+    el('span',{class:'tag',text:'كتابي '+x.textXp}),
+    el('span',{class:'tag',text:'صوتي '+x.voiceXp}),
+    el('span',{class:'tag on',text:'إجمالي '+x.points+' (م'+x.totalLevel+')'}),
+    el('button',{class:'b2',text:'تعديل',on:{click:function(){find(x.id);q.value=x.id}}})
+  ]));
+});
+m.appendChild(lb);
+var ed=el('div',{class:'card'});
+ed.appendChild(el('div',{class:'cat',text:'تعديل رتبة/نقاط أي عضو'}));
+var q=el('input',{placeholder:'آي دي العضو أو اسمه',style:'flex:1;min-width:200px'});
+var out=el('div',{});
+ed.appendChild(row([q,el('button',{class:'btn',text:'بحث',on:{click:function(){find(q.value)}}})]));
+ed.appendChild(el('div',{class:'mut',text:'البحث بالاسم يحتاج تفعيل MEMBERS_INTENT، والآي دي يشتغل دايماً.',style:'margin:8px 0'}));
+ed.appendChild(out);
+function find(v){v=String(v||'').trim();if(!v)return toast('اكتب آي دي أو اسم',1);out.innerHTML='';out.appendChild(el('div',{class:'mut',text:'جاري البحث...'}));
+  api('levels/member?id='+encodeURIComponent(v)).then(function(r){out.innerHTML='';out.appendChild(editor(r))}).catch(function(e){out.innerHTML='';out.appendChild(el('div',{class:'mut',text:e.message}))})}
+function editor(r){var box=el('div',{});
+  box.appendChild(el('div',{class:'row'},[el('img',{src:r.member.avatar,width:'44',height:'44',style:'border-radius:50%'}),el('div',{},[el('div',{text:r.member.name}),el('div',{class:'mut',text:r.member.id})])]));
+  var p=r.profile;
+  var pi=num(p.points),ti=num(p.textXp),vi=num(p.voiceXp);
+  box.appendChild(el('div',{class:'row',style:'margin:10px 0'},[lab('الإجمالي XP'),pi,lab('كتابي XP'),ti,lab('صوتي XP'),vi]));
+  box.appendChild(el('div',{class:'row'},[
+    el('button',{class:'btn',text:'حفظ القيم',on:{click:function(){go(api('levels/edit',{id:r.member.id,points:Number(pi.value),textXp:Number(ti.value),voiceXp:Number(vi.value)}),'انحفظ ✅','levels')}}}),
+    el('span',{class:'tag',text:'الترتيب #'+p.rank}),el('span',{class:'tag',text:'مستوى إجمالي '+p.totalLevel}),el('span',{class:'tag',text:'كتابي '+p.textLevel}),el('span',{class:'tag',text:'صوتي '+p.voiceLevel})
+  ]));
+  var amt=num(100);
+  box.appendChild(el('div',{class:'row',style:'margin-top:8px'},[amt,
+    el('button',{class:'b2',text:'➕ إضافة XP',on:{click:function(){go(api('levels/edit',{id:r.member.id,add:Math.abs(Number(amt.value))}),'تم ✅','levels')}}}),
+    el('button',{class:'b2',text:'➖ خصم XP',on:{click:function(){go(api('levels/edit',{id:r.member.id,add:-Math.abs(Number(amt.value))}),'تم ✅','levels')}}})
+  ]));
+  return box;
+}
+m.appendChild(ed);
+return Promise.resolve()})};
 function boot(){api('me').then(function(d){var r=$('root');
 if(!d.enabled){r.appendChild(el('div',{class:'main'},[card('',el('div',{text:'اللوحة غير مفعلة: ناقص DISCORD_CLIENT_ID أو DISCORD_CLIENT_SECRET أو SESSION_SECRET في Render'}))]));return}
 if(!d.user){r.appendChild(el('div',{class:'main'},[el('h1',{text:'لوحة نوفا الملكية'}),el('div',{class:'mut',text:'سجّل دخولك بحساب ديسكورد (ارثر وإيدا فقط)'}),el('p'),el('a',{class:'btn',href:'/auth/login',text:'تسجيل الدخول بديسكورد'})]));return}
@@ -642,6 +704,57 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         const r = await jail.syncAll(g, cfg);
         note(req, `مزامنة نظام السجن (${r.ok}/${r.total} روم)`);
         return r;
+    }));
+
+    // ===== المستويات والرتب: معدلات الخبرة + المتصدرين + تعديل XP أي عضو =====
+    api.get('/levels', h(async (g) => {
+        const rows = await points.top(g.id, 25);
+        const leaderboard = [];
+        for (const d of rows) {
+            const u = g.client.users.cache.get(d.userId) || await g.client.users.fetch(d.userId).catch(() => null);
+            leaderboard.push({
+                id: d.userId, name: u ? (u.globalName || u.username) : d.userId,
+                avatar: u ? u.displayAvatarURL({ size: 64 }) : '',
+                points: d.points || 0, textXp: d.textXp || 0, voiceXp: d.voiceXp || 0,
+                totalLevel: points.levelOf(d.points || 0)
+            });
+        }
+        return { config: levels.get(g.id), dbReady: points.ready(), leaderboard };
+    }));
+    api.post('/levels/save', h(async (g, b, req) => {
+        const saved = levels.set(g.id, b);
+        note(req, 'تعديل معدلات الخبرة (المستويات)');
+        return { config: saved };
+    }));
+    api.get('/levels/member', h(async (g, b, req) => {
+        const query = String(req.query.id || '').trim();
+        const id = (query.match(/\d{17,20}/) || [])[0];
+        let m = null;
+        if (id) m = await g.members.fetch(id).catch(() => null);
+        else if (process.env.MEMBERS_INTENT === '1' && query.length >= 2) {
+            const list = await g.members.fetch({ query, limit: 1 }).catch(() => null);
+            if (list && list.size) m = [...list.values()][0];
+        }
+        if (!m) throw new Error('ما لقيت العضو (جرّب الآي دي)');
+        return {
+            member: { id: m.id, name: m.displayName, avatar: m.displayAvatarURL({ size: 64 }) },
+            profile: await points.profile(g.id, m.id)
+        };
+    }));
+    api.post('/levels/edit', h(async (g, b, req) => {
+        const m = await getMember(g, b.id);
+        if (b.add !== undefined && b.points === undefined && b.textXp === undefined && b.voiceXp === undefined) {
+            const amount = Math.floor(Number(b.add));
+            if (!Number.isFinite(amount) || amount === 0) throw new Error('رقم غير صالح');
+            const doc = await points.add(g.id, m.id, amount);
+            if (!doc) throw new Error('نظام النقاط غير متصل (قاعدة البيانات)');
+            note(req, `${amount >= 0 ? '+' : ''}${amount} XP لـ ${m.user.username}`);
+            return { points: doc.points };
+        }
+        const doc = await points.setXp(g.id, m.id, { points: b.points, textXp: b.textXp, voiceXp: b.voiceXp });
+        if (!doc) throw new Error('ما فيه قيم صالحة للتعديل');
+        note(req, `تعديل XP العضو ${m.user.username} (إجمالي ${doc.points})`);
+        return { points: doc.points };
     }));
 
     // ===== صفحة المحظورين: قائمة كل المحظورين بالسيرفر + فك الحظر =====

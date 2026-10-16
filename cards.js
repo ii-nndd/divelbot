@@ -18,6 +18,10 @@ const available = () => !!canvasLib;
 
 const CRIMSON = '#b3121e', ORANGE = '#ff8a3d', GOLD = '#ffc85a', BG1 = '#17141b', BG2 = '#0a090d';
 
+// نفس معادلة المستويات المستخدمة في points.js (نسخة محلية عشان ما يصير استدعاء دائري)
+const levelOf = (p) => Math.floor(Math.sqrt(Math.max(0, p) / 50));
+const needFor = (l) => 50 * l * l;
+
 function roundRect(ctx, x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -65,88 +69,192 @@ async function drawAvatar(ctx, url, cx, cy, r) {
     ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
 }
 
-// بطاقة مستوى/نقاط عضو وحد (لأمر /نقاطي)
-async function rankCard({ avatarURL, username, points, level, lo, hi, rank }) {
+// ===== شعار نوفا (يستخدم nova-icon.png، وإلا يرسم نجمة احتياطية) =====
+const LOGO_PATH = path.join(__dirname, 'nova-icon.png');
+let logoImg = null, logoTried = false;
+async function loadLogo() {
+    if (logoTried) return logoImg;
+    logoTried = true;
+    try { logoImg = await canvasLib.loadImage(LOGO_PATH); }
+    catch { logoImg = null; }
+    return logoImg;
+}
+
+// نجمة نوفا (نفس شعار اللوحة) — احتياطي لو صورة الشعار ما توفرت
+function novaMark(ctx, cx, cy, r, alpha = 1) {
+    ctx.save(); ctx.globalAlpha = alpha;
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    g.addColorStop(0, '#fff6e8'); g.addColorStop(.45, ORANGE); g.addColorStop(1, CRIMSON);
+    ctx.fillStyle = g;
+    const spikes = 8, inner = r * 0.42;
+    ctx.beginPath();
+    for (let i = 0; i < spikes * 2; i++) {
+        const rad = i % 2 ? inner : r;
+        const a = (Math.PI / spikes) * i - Math.PI / 2;
+        const x = cx + Math.cos(a) * rad, y = cy + Math.sin(a) * rad;
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+}
+
+// يرسم شعار نوفا (صورة إن توفرت، وإلا النجمة)
+async function drawLogo(ctx, cx, cy, size, alpha = 1) {
+    const img = await loadLogo();
+    if (img) {
+        ctx.save(); ctx.globalAlpha = alpha;
+        ctx.drawImage(img, cx - size / 2, cy - size / 2, size, size);
+        ctx.restore();
+    } else {
+        novaMark(ctx, cx, cy, size / 2, alpha);
+    }
+}
+
+function pill(ctx, x, y, w, h, r, fill, stroke) {
+    roundRect(ctx, x, y, w, h, r);
+    ctx.fillStyle = fill; ctx.fill();
+    if (stroke) { ctx.lineWidth = 1.5; ctx.strokeStyle = stroke; ctx.stroke(); }
+}
+
+// بطاقة الرتبة الشاملة: كتابي + صوتي + إجمالي + الترتيب + شريط تقدم + شعار نوفا
+async function rankCard({ avatarURL, username, displayName, points, textXp = 0, voiceXp = 0, textLevel = 0, voiceLevel = 0, totalXp, totalLevel, lo, hi, rank = 0 }) {
     ensureFont();
-    const W = 934, H = 282;
+    const total = totalXp != null ? totalXp : (points || 0);
+    const level = totalLevel != null ? totalLevel : levelOf(total);
+    const needLo = lo != null ? lo : needFor(level);
+    const needHi = hi != null ? hi : needFor(level + 1);
+
+    const W = 1000, H = 400, PAD = 28;
     const canvas = canvasLib.createCanvas(W, H);
     const ctx = canvas.getContext('2d');
-    roundRect(ctx, 0, 0, W, H, 24); ctx.clip();
+    roundRect(ctx, 0, 0, W, H, 28); ctx.clip();
 
-    const AR = 90, AX = 56 + AR, AY = H / 2;
+    const AX = 170, AY = 208, AR = 96;
     background(ctx, W, H, AX);
+
+    // شعار نوفا كبير خفيف بالخلف + هوية الاسم
+    await drawLogo(ctx, W - 190, H - 120, 300, 0.07);
+    await drawLogo(ctx, 64, 56, 46, 1);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = GOLD;
+    ctx.font = '600 26px ' + FONT_FAMILY;
+    ctx.fillText('NOVA', 96, 66);
+
+    // الصورة الشخصية
     await drawAvatar(ctx, avatarURL, AX, AY, AR);
 
-    const rightEdge = W - 46;
+    // اسم العضو + الترتيب (يمين)
+    const rightEdge = W - PAD - 20;
     ctx.textAlign = 'right';
     ctx.fillStyle = '#ffffff';
-    ctx.font = '600 42px ' + FONT_FAMILY;
-    ctx.fillText(username, rightEdge, 88);
+    ctx.font = '600 46px ' + FONT_FAMILY;
+    ctx.fillText(displayName || username || 'عضو', rightEdge, 88);
 
-    ctx.font = '30px ' + FONT_FAMILY;
+    ctx.font = '28px ' + FONT_FAMILY;
     ctx.fillStyle = GOLD;
-    ctx.fillText(`المستوى ${level}   •   الترتيب #${rank}`, rightEdge, 130);
+    ctx.fillText('الترتيب ' + rank, rightEdge, 132);
 
-    const barX = AX + AR + 40, barY = 178, barW = rightEdge - barX, barH = 28;
-    roundRect(ctx, barX, barY, barW, barH, 14);
+    // شريط التقدم (للمستوى الإجمالي)
+    const barX = 320, barY = 166, barW = rightEdge - barX, barH = 30;
+    ctx.font = '22px ' + FONT_FAMILY;
+    ctx.fillStyle = '#9a97a8';
+    ctx.fillText('التقدم للمستوى ' + (level + 1), rightEdge, 160);
+    roundRect(ctx, barX, barY, barW, barH, 15);
     ctx.fillStyle = 'rgba(255,255,255,.08)'; ctx.fill();
-    const pct = hi > lo ? Math.max(0, Math.min(1, (points - lo) / (hi - lo))) : 0;
+    const pct = needHi > needLo ? Math.max(0, Math.min(1, (total - needLo) / (needHi - needLo))) : 0;
     if (pct > 0) {
-        roundRect(ctx, barX, barY, Math.max(barH, barW * pct), barH, 14);
+        roundRect(ctx, barX, barY, Math.max(barH, barW * pct), barH, 15);
         const bg = ctx.createLinearGradient(barX, 0, barX + barW, 0);
         bg.addColorStop(0, ORANGE); bg.addColorStop(1, CRIMSON);
         ctx.fillStyle = bg; ctx.fill();
     }
-
-    ctx.font = '24px ' + FONT_FAMILY;
+    ctx.font = '22px ' + FONT_FAMILY;
     ctx.fillStyle = '#d8d5e2';
-    ctx.fillText(`${points} / ${hi} نقطة`, rightEdge, barY + barH + 34);
+    ctx.fillText(total + ' / ' + needHi + ' XP  (' + Math.round(pct * 100) + '%)', rightEdge, barY + barH + 30);
+
+    // ثلاث بطاقات: كتابي / صوتي / إجمالي
+    const pY = 250, pH = 118, gap = 16;
+    const areaX = 320, areaW = rightEdge - areaX;
+    const pw = (areaW - gap * 2) / 3;
+    const stats = [
+        { t: 'التفاعل الكتابي', sub: 'المستوى ' + textLevel, val: textXp + ' XP', c: ORANGE },
+        { t: 'التفاعل الصوتي', sub: 'المستوى ' + voiceLevel, val: voiceXp + ' XP', c: '#7fe0a5' },
+        { t: 'الإجمالي', sub: 'المستوى ' + level, val: total + ' XP', c: GOLD }
+    ];
+    stats.forEach((s, k) => {
+        const x = areaX + k * (pw + gap);
+        pill(ctx, x, pY, pw, pH, 18, 'rgba(255,255,255,.05)', 'rgba(255,255,255,.10)');
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#9a97a8';
+        ctx.font = '22px ' + FONT_FAMILY;
+        ctx.fillText(s.t, x + pw / 2, pY + 36);
+        ctx.fillStyle = s.c;
+        ctx.font = '600 32px ' + FONT_FAMILY;
+        ctx.fillText(s.sub, x + pw / 2, pY + 76);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '24px ' + FONT_FAMILY;
+        ctx.fillText(s.val, x + pw / 2, pY + 106);
+    });
+
+    // مستوى إجمالي تحت الصورة
+    pill(ctx, AX - 78, 330, 156, 44, 22, CRIMSON, null);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '600 24px ' + FONT_FAMILY;
+    ctx.fillText('المستوى ' + level, AX, 360);
 
     return canvas.encode('png');
 }
 
 // بطاقة المتصدرين (لأمر /المتصدرين) — أعلى 10
-async function leaderboardCard(entries) {
+async function leaderboardCard(entries, title = 'المتصدرين بنوفا') {
     ensureFont();
-    const ROW = 72, PAD = 36, W = 820;
-    const H = PAD * 2 + 70 + ROW * entries.length;
+    const ROW = 76, PAD = 36, W = 880, HEAD = 96;
+    const H = HEAD + ROW * entries.length + PAD;
     const canvas = canvasLib.createCanvas(W, H);
     const ctx = canvas.getContext('2d');
     roundRect(ctx, 0, 0, W, H, 24); ctx.clip();
     background(ctx, W, H, W * 0.5);
+    await drawLogo(ctx, W - 58, 54, 54, 1);
 
-    ctx.textAlign = 'center';
+    ctx.textAlign = 'right';
     ctx.fillStyle = GOLD;
-    ctx.font = '600 44px ' + FONT_FAMILY;
-    ctx.fillText('🏆 المتصدرين بنوفا', W / 2, 62);
+    ctx.font = '600 42px ' + FONT_FAMILY;
+    ctx.fillText(title, W - 100, 68);
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#9a97a8';
+    ctx.font = '22px ' + FONT_FAMILY;
+    ctx.fillText('كتابي + صوتي + إجمالي', PAD, 68);
 
     const medals = ['#ffd24a', '#d8d8d8', '#c9834a'];
-    let y = 70 + PAD;
     for (let k = 0; k < entries.length; k++) {
         const e = entries[k];
-        const rowY = y + ROW * k;
-        roundRect(ctx, PAD, rowY, W - PAD * 2, ROW - 14, 16);
-        ctx.fillStyle = k % 2 === 0 ? 'rgba(255,255,255,.04)' : 'rgba(255,255,255,.02)';
-        ctx.fill();
+        const rowY = HEAD + ROW * k;
+        pill(ctx, PAD, rowY, W - PAD * 2, ROW - 12, 16, k % 2 ? 'rgba(255,255,255,.02)' : 'rgba(255,255,255,.05)', null);
+        const cy = rowY + (ROW - 12) / 2;
 
         // دائرة الترتيب
-        const cx = PAD + 34, cy = rowY + (ROW - 14) / 2, r = 26;
+        const cx = PAD + 34, r = 26;
         ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
         ctx.fillStyle = medals[k] || '#2a2836'; ctx.fill();
-        ctx.fillStyle = k < 3 ? '#1a1500' : '#d8d5e2';
-        ctx.font = '600 24px ' + FONT_FAMILY; ctx.textAlign = 'center';
-        ctx.fillText(String(k + 1), cx, cy + 9);
+        ctx.textAlign = 'center'; ctx.fillStyle = k < 3 ? '#1a1500' : '#d8d5e2';
+        ctx.font = '600 24px ' + FONT_FAMILY; ctx.fillText(String(k + 1), cx, cy + 9);
 
-        if (e.avatarURL) await drawAvatar(ctx, e.avatarURL, cx + 90, cy, 24);
+        if (e.avatarURL) await drawAvatar(ctx, e.avatarURL, cx + 96, cy, 24);
+
+        ctx.textAlign = 'right'; ctx.fillStyle = '#fff';
+        ctx.font = '500 28px ' + FONT_FAMILY;
+        ctx.fillText(e.name, W - PAD - 180, cy + 10);
 
         ctx.textAlign = 'right';
-        ctx.fillStyle = '#fff';
-        ctx.font = '500 28px ' + FONT_FAMILY;
-        ctx.fillText(e.name, W - PAD - 20, cy + 10);
-
-        ctx.font = '22px ' + FONT_FAMILY;
-        ctx.fillStyle = ORANGE;
-        ctx.fillText(`${e.points} نقطة`, W - PAD - 20, cy - 16);
+        if (e.totalLevel != null) {
+            ctx.fillStyle = GOLD; ctx.font = '22px ' + FONT_FAMILY;
+            ctx.fillText('المستوى ' + e.totalLevel, W - PAD - 20, cy - 7);
+        }
+        ctx.fillStyle = ORANGE; ctx.font = '22px ' + FONT_FAMILY;
+        ctx.fillText(e.points + ' XP', W - PAD - 20, cy + 21);
     }
 
     return canvas.encode('png');
