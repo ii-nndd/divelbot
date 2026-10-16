@@ -174,7 +174,7 @@ box.appendChild(el('div',{class:'item'},k))});m.appendChild(box)})};
 pages.colors=function(m){return api('colors').then(function(d){var c=d.config;
 var nf=function(n){return Number(n||0).toLocaleString('en-US')};
 m.appendChild(el('h1',{text:'رتب الألوان'}));
-m.appendChild(el('div',{class:'mut',text:'نظام ألوان كامل: قائمة ألوان بروم مخصص يختار منها الأعضاء لونهم (لون واحد لكل عضو)، مع إدارة كاملة للألوان من هنا: إنشاء، ربط رتبة موجودة، تعديل، حذف، وتحديث البانل بنقرة وحدة. الحد الأقصى '+d.max+' لون — لو زادت عن 25 تنقسم تلقائياً على قوائم (5 قوائم × 25).'}));
+m.appendChild(el('div',{class:'mut',text:'نظام ألوان كامل: صورة ألوان تُولَّد بالكانفس (Canvas) فيها شبكة الألوان مرقّمة، تنزل مع بانل الروم كصورة رئيسية، وتحتها قائمة اختيار أرقام فقط — العضو يشوف الرقم بالصورة ويختاره فياخذ الرتبة وتنشال عنه باقي الألوان (لون واحد لكل عضو). الحد الأقصى '+d.max+' لون — لو زادت عن 25 تنقسم تلقائياً على قوائم (5 قوائم × 25).'}));
 if(d.needPerm)m.appendChild(card('',el('div',{class:'mut',style:'color:#ff8a8a',text:'⚠️ البوت ما عنده صلاحية Manage Roles أو رتبته مو فوق رتب الألوان — أعطه الصلاحية وارفعه فوق الألوان عشان الإدارة تشتغل.'})));
 
 var pre=el('div',{class:'card'});
@@ -224,11 +224,12 @@ var counts={};
 var c3=el('div',{class:'card'});
 c3.appendChild(el('div',{class:'cat',text:'٣) الألوان المضافة ('+c.roles.length+' / '+d.max+')'}));
 if(!c.roles.length)c3.appendChild(el('div',{class:'mut',text:'ما فيه ألوان بعد — أضف أول لون من فوق.'}));
-c.roles.forEach(function(r){
+c.roles.forEach(function(r,ix){
   var cc=el('input',{type:'color',value:r.color});
   cc.addEventListener('change',function(){go(api('colors/edit',{id:r.id,color:cc.value}),'تغيّر اللون ✅','colors')});
   var ce=el('span',{class:'tag',text:'... عضو'});counts[r.id]=ce;
   c3.appendChild(el('div',{class:'item'},[
+    el('span',{class:'tag',text:'رقم '+(ix+1)}),
     el('span',{class:'sw',style:'background:'+r.color}),
     el('span',{class:'nm',text:r.name}),
     el('span',{class:'tag',text:r.color}),
@@ -240,9 +241,30 @@ c.roles.forEach(function(r){
 });
 m.appendChild(c3);
 
+// ===== ٤) صورة الألوان المولّدة (Canvas) =====
+var cImg=el('div',{class:'card'});
+cImg.appendChild(el('div',{class:'cat',text:'٤) صورة الألوان المولّدة 🖼️'}));
+cImg.appendChild(el('div',{class:'mut',text:'صورة تُولَّد بالكانفس (Canvas): خلفية غامقة + شبكة دوائر بأكواد الألوان ورقم كل لون تحت دائرته، وتنزل مع رسالة البانل كصورة رئيسية. القائمة تحت الصورة أرقام فقط — العضو يشوف الرقم بالصورة ويختاره.'}));
+var pv=el('img',{src:'/dashboard/api/colors/image.png?t='+Date.now(),style:'max-width:100%;border-radius:14px;margin:12px 0;border:1px solid #2a2836;background:#12101a'});
+cImg.appendChild(pv);
+cImg.appendChild(el('div',{class:'row'},[
+  el('button',{class:'btn',text:'🖼️ إعادة توليد صورة الألوان وإرسالها',on:{click:function(){
+    if(!c.roles.length)return toast('أضف ألوان أول',1);
+    if(!c.channelId)return toast('حدّد روم قائمة الألوان واحفظ أول',1);
+    api('colors/image',{resend:false}).then(function(){pv.src='/dashboard/api/colors/image.png?t='+Date.now();toast('تم توليد الصورة وإرسالها للبانل ✅');show('colors')}).catch(function(e){toast(e.message,1)})
+  }}}),
+  el('button',{class:'b2',text:'📨 توليد وإرسال برسالة جديدة',on:{click:function(){
+    if(!c.channelId)return toast('حدّد روم قائمة الألوان واحفظ أول',1);
+    if(!confirm('نرسل بانل جديد بالصورة (وتنحذف الرسالة القديمة)؟'))return;
+    api('colors/image',{resend:true}).then(function(){pv.src='/dashboard/api/colors/image.png?t='+Date.now();toast('انرسل البانل الجديد مع الصورة ✅');show('colors')}).catch(function(e){toast(e.message,1)})
+  }}}),
+  el('button',{class:'b2',text:'🔄 تحديث المعاينة',on:{click:function(){pv.src='/dashboard/api/colors/image.png?t='+Date.now();toast('تحدّثت المعاينة ✅')}}})
+]));
+m.appendChild(cImg);
+
 var sumEl=el('div',{class:'mut',style:'margin:8px 0',text:'جاري حساب عدد الأعضاء...'});
 var c4=el('div',{class:'card'});
-c4.appendChild(el('div',{class:'cat',text:'٤) 🚨 إزالة شاملة لكل الألوان'}));
+c4.appendChild(el('div',{class:'cat',text:'٥) 🚨 إزالة شاملة لكل الألوان'}));
 c4.appendChild(el('div',{class:'mut',text:'تسحب كل رتب الألوان المضافة فوق من جميع أعضاء السيرفر بضغطة وحدة — مفيدة لو بغيت تعيد توزيع الألوان من جديد. الرتب نفسها تبقى بالسيرفر (ما تنحذف). العملية تشتغل بالخلفية وتشوف تقدمها تحت.'}));
 c4.appendChild(sumEl);
 var ok=sw(false,function(){});
@@ -747,6 +769,23 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         const r = await colors.applyPreset(g, g.id, { deleteOld: b.deleteOld === true });
         note(req, `تجهيز الألوان الصريحة (${r.roles.length} لون • جديد ${r.created} • مصحّح ${r.fixed}${r.deleted ? ' • محذوف ' + r.deleted : ''})`);
         return { roles: r.roles, created: r.created, fixed: r.fixed, oldCount: r.oldCount, deleted: r.deleted, warn: r.warn };
+    }));
+    // صورة الألوان (Canvas) معاينة مباشرة بالداشبورد — يرسلها المتصفح مع كوكي الجلسة
+    api.get('/colors/image.png', async (req, res) => {
+        try {
+            const g = client.guilds.cache.get(CONFIG.GUILD_ID);
+            if (!g) return res.status(503).end();
+            const buf = await colors.renderImage(colors.get(g.id));
+            res.set('Content-Type', 'image/png').set('Cache-Control', 'no-store').send(buf);
+        } catch (e) {
+            res.status(400).json({ error: String(e.message || 'تعذر توليد الصورة').slice(0, 150) });
+        }
+    });
+    // إعادة توليد صورة الألوان وإرسال/تحديث البانل
+    api.post('/colors/image', h(async (g, b, req) => {
+        const r = await colors.sendPanel(g, g.id, { resend: b.resend === true });
+        note(req, `إعادة توليد صورة الألوان وإرسالها (${b.resend ? 'رسالة جديدة' : 'تحديث البانل'})`);
+        return { messageId: r.messageId, channelId: r.channelId, edited: r.edited, count: colors.get(g.id).roles.length };
     }));
     api.post('/colors/panel', h(async (g, b, req) => {
         if (!canManageRoles(g)) throw new Error('البوت يحتاج صلاحية Manage Roles');

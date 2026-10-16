@@ -5,11 +5,13 @@
 //  3) زر تحديث/إعادة إرسال البانل بنقرة وحدة من اللوحة.
 //  4) إزالة شاملة: سحب كل رتب الألوان من جميع الأعضاء بضغطة وحدة (تشتغل بالخلفية مع تتبع التقدم).
 // كل الإعدادات محفوظة في store (ملف محلي + نسخة دائمة MongoDB).
-const { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, MessageFlags } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, MessageFlags, AttachmentBuilder } = require('discord.js');
 const store = require('./store');
+const colorimage = require('./colorimage');
 
 const FILE = 'colors.json';
 const MENU_ID = 'nova_colors';
+const IMG_NAME = 'nova-colors.png';   // اسم صورة الألوان المرفقة (ثابت عشان التعديل يبدلها)
 const MAX = 125;      // أقصى عدد ألوان: 5 قوائم × 25 خيار (حد ديسكورد لكل رسالة)
 const PER_MENU = 25;  // حد ديسكورد الواحد: 25 خيار بأي قائمة اختيار
 const MAX_MENUS = 5;  // حد ديسكورد: 5 صفوف (قوائم) بالرسالة الوحدة
@@ -81,43 +83,58 @@ function set(gid, b = {}) {
     return writeCfg(gid, cfg);
 }
 
-// ===== بانل الألوان (Embed + القائمة/القوائم) =====
-function panel(cfg) {
+// ===== بانل الألوان (صورة Canvas + Embed + قائمة/قوائم أرقام) =====
+// opts.textList = true يعني نضيف قائمة نصية بالبانل (تُستخدم كبديل لو تعطّل الرسم)
+function panel(cfg, opts = {}) {
     const n = cfg.roles.length;
+    const menus = Math.min(Math.ceil(n / PER_MENU) || 0, MAX_MENUS);
     const e = new EmbedBuilder().setColor(0xb3121e).setTitle(cfg.title || DEF.title).setDescription(cfg.desc || DEF.desc);
 
     if (n) {
-        // نوزّع أسماء الألوان على حقول (كل حقل حتى 1000 حرف) عشان ما تنقص أي ألوان
-        const fields = [];
-        let cur = '';
-        for (const r of cfg.roles) {
-            const line = '• ' + r.name + '\n';
-            if ((cur + line).length > 1000) { fields.push(cur.trim()); cur = ''; }
-            cur += line;
+        if (opts.textList) {
+            // نص بديل: رقم اللون + اسمه + كوده
+            const fields = [];
+            let cur = '';
+            cfg.roles.forEach((r, i) => {
+                const line = `${i + 1}) ${r.name}  ${r.color}\n`;
+                if ((cur + line).length > 1000) { fields.push(cur.trim()); cur = ''; }
+                cur += line;
+            });
+            if (cur.trim()) fields.push(cur.trim());
+            fields.slice(0, 20).forEach((v, i) => e.addFields({ name: i === 0 ? `الألوان المتاحة (${n})` : '\u200b', value: v }));
         }
-        if (cur.trim()) fields.push(cur.trim());
-        fields.slice(0, 20).forEach((v, i) => e.addFields({ name: i === 0 ? `الألوان المتاحة (${n})` : '\u200b', value: v }));
-        e.setFooter({ text: n > PER_MENU ? `الألوان موزعة على ${Math.min(Math.ceil(n / PER_MENU), MAX_MENUS)} قوائم — اختر لونك من القوائم تحت 👇` : 'اختَر لونك من القائمة تحت 👇' });
+        e.setFooter({ text: `عدد الألوان: ${n}${menus > 1 ? ` (موزعة على ${menus} قوائم)` : ''} • اختر رقم لونك من القائمة تحت 👇` });
     } else {
         e.setFooter({ text: 'ما فيه ألوان مضافة حالياً — تُضاف من لوحة التحكم.' });
     }
 
     const comps = [];
-    const menus = Math.min(Math.ceil(n / PER_MENU) || 0, MAX_MENUS);
     for (let m = 0; m < menus; m++) {
         const chunk = cfg.roles.slice(m * PER_MENU, (m + 1) * PER_MENU);
         const menu = new StringSelectMenuBuilder()
             .setCustomId(menus > 1 ? `${MENU_ID}:${m}` : MENU_ID)
-            .setPlaceholder(menus > 1 ? `🎨 اختر لونك (${m + 1}/${menus})` : '🎨 اختر لونك')
+            .setPlaceholder(menus > 1 ? `🎨 اختر رقم لونك (${m + 1}/${menus})` : '🎨 اختر رقم لونك')
             .setMinValues(1).setMaxValues(1)
-            .addOptions(chunk.map((r) => ({
-                label: (r.name || 'لون').slice(0, 100),
-                value: r.id,
-                description: ((r.en ? r.en + ' • ' : '') + r.color).slice(0, 100)
-            })));
+            // الخيارات أرقام فقط — نفس أرقام الصورة (1، 2، 3…)
+            .addOptions(chunk.map((r, i) => ({ label: String(m * PER_MENU + i + 1), value: r.id })));
         comps.push(new ActionRowBuilder().addComponents(menu));
     }
     return { embeds: [e], components: comps };
+}
+
+// يبني البانل كامل: يولّد صورة الألوان (Canvas) ويحطها كصورة رئيسية بالـ Embed
+async function buildPanel(cfg, opts = {}) {
+    if (!cfg.roles.length) return panel(cfg, opts);
+    try {
+        const buf = await colorimage.render(cfg);
+        const p = panel(cfg, opts);
+        p.files = [new AttachmentBuilder(buf, { name: IMG_NAME })];
+        p.embeds[0].setImage('attachment://' + IMG_NAME);
+        return p;
+    } catch (e) {
+        console.error('⚠️ توليد صورة الألوان فشل:', e.message);
+        return panel(cfg, { textList: true });
+    }
 }
 
 // إرسال/تحديث البانل بالروم المحدد. resend=true يعني رسالة جديدة (وتنحذف القديمة)
@@ -126,7 +143,7 @@ async function sendPanel(g, gid, opts = {}) {
     if (!cfg.channelId) throw new Error('حدّد روم قائمة الألوان أول');
     const ch = g.channels.cache.get(cfg.channelId) || await g.channels.fetch(cfg.channelId).catch(() => null);
     if (!ch || !ch.isTextBased() || ch.isVoiceBased()) throw new Error('روم الألوان مو موجود أو مو روم نصي');
-    const payload = panel(cfg);
+    const payload = await buildPanel(cfg, { textList: opts.textList === true });
 
     if (cfg.messageId && !opts.resend) {
         const m = await ch.messages.fetch(cfg.messageId).catch(() => null);
@@ -292,7 +309,8 @@ async function handleSelect(i) {
         if (others.length) await i.member.roles.remove(others, 'تبديل لون من قائمة ألوان السيرفر').catch(() => {});
         if (!i.member.roles.cache.has(role.id)) await i.member.roles.add(role, 'اختيار لون من قائمة ألوان السيرفر');
         const n = others.length ? ` (وشلنا عنك ${others.length} لون قديم)` : '';
-        await i.editReply({ content: `🎨 تم تخصيص لونك: **${role.name}**${n}` });
+        const idx = cfg.roles.findIndex((r) => r.id === role.id);
+        await i.editReply({ content: `🎨 تم تخصيص لونك${idx >= 0 ? ` رقم ${idx + 1}` : ''}: **${role.name}**${n}` });
     } catch (err) {
         console.error('❌ قائمة الألوان:', err.message);
         const msg = { content: '⚠️ ما قدرت أخصص اللون، تأكد إن عندي صلاحية Manage Roles ورتبتي أعلى من رتب الألوان.', flags: EPH };
@@ -398,8 +416,9 @@ function ensure(client, CONFIG, delay = 10_000) {
 }
 
 module.exports = {
-    FILE, MENU_ID, MAX, PER_MENU, MAX_MENUS, DEF, PRESETS, presetLabel,
-    get, set, panel, sendPanel, refreshQuiet, ensure, init,
+    FILE, MENU_ID, MAX, PER_MENU, MAX_MENUS, IMG_NAME, DEF, PRESETS, presetLabel,
+    get, set, panel, buildPanel, sendPanel, refreshQuiet, ensure, init,
+    renderImage: (cfg) => colorimage.render(cfg), imageAvailable: () => colorimage.available(),
     addRole, editRole, delRole, handleSelect, applyPreset, findColorChannel,
     startClear, clearStatus, stats
 };
