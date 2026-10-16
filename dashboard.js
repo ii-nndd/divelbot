@@ -14,7 +14,8 @@ const levels = require('./levels');
 const botcontrol = require('./botcontrol');
 const colors = require('./colors');
 
-const BASE = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'https://divelbot.onrender.com';
+// الرابط العام: يُقرأ وقت الطلب (مو وقت الإقلاع) لأن النفق التلقائي يضبطه بعد الإقلاع
+const BASE = () => (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'https://divelbot.onrender.com').replace(/\/+$/, '');
 const SECRET = process.env.SESSION_SECRET;
 const CID = process.env.DISCORD_CLIENT_ID;
 const CSEC = process.env.DISCORD_CLIENT_SECRET;
@@ -522,7 +523,7 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
     const enabled = !!(SECRET && CID && CSEC);
     const owners = new Set([CONFIG.ARTHUR_ID, CONFIG.SPECIAL_USER_ID]);
     const session = (req) => verify(cookies(req).dash);
-    const redirectUri = BASE + '/auth/callback';
+    const redirectUri = () => BASE() + '/auth/callback';
 
     app.get('/dashboard', (req, res) => res.type('html').send(PAGE));
 
@@ -551,7 +552,7 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         const state = crypto.randomBytes(16).toString('hex');
         setCookie(res, 'oauth_state', state, 600);
         res.redirect('https://discord.com/oauth2/authorize?' + new URLSearchParams({
-            client_id: CID, response_type: 'code', scope: 'identify', redirect_uri: redirectUri, state
+            client_id: CID, response_type: 'code', scope: 'identify', redirect_uri: redirectUri(), state
         }));
     });
 
@@ -562,7 +563,7 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
             if (!code || !state || state !== cookies(req).oauth_state) return res.status(400).send('طلب غير صالح، جرب مرة ثانية');
             const tr = await fetch('https://discord.com/api/oauth2/token', {
                 method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ client_id: CID, client_secret: CSEC, grant_type: 'authorization_code', code: String(code), redirect_uri: redirectUri })
+                body: new URLSearchParams({ client_id: CID, client_secret: CSEC, grant_type: 'authorization_code', code: String(code), redirect_uri: redirectUri() })
             });
             const tok = await tr.json();
             if (!tok.access_token) return res.status(400).send('فشل تسجيل الدخول (تأكد من Redirect URI في موقع المطورين)');

@@ -24,3 +24,7 @@ desktop.ini
 
 # Google Play (assetlinks)
 assetlinks.json
+
+# نفق Cloudflare (binary يُنزَّل تلقائياً عند التشغيل — ما يُرفع أبداً)
+cloudflared
+cloudflared.exe

@@ -24,6 +24,7 @@ const jail = require('./jail');
 const trap = require('./trap');
 const colors = require('./colors');
 const mountPanel = require('./panel');
+const tunnel = require('./tunnel');
 
 // ====================================================================
 // 1. الإعدادات (عدل الآي ديهات هنا فقط)
@@ -806,6 +807,21 @@ setInterval(() => {
     const mb = process.memoryUsage().heapUsed / 1024 / 1024;
     if (mb > 200) console.log(`🧠 استهلاك الذاكرة: ${mb.toFixed(2)} MB`);
 }, 30 * 60_000);
+
+// ====================================================================
+// 12. نفق Cloudflare التلقائي (TUNNEL=1) — للاستضافات المجانية اللي ما تعطي HTTPS
+// ====================================================================
+// على Render ما نحتاجه (Render يعطي رابط HTTPS). على HeavenCloud/Wispbyte (Pterodactyl)
+// هذا اللي يخلي اللوحة /dashboard تشتغل: ينزّل cloudflared، يشغّله، ياخذ رابط HTTPS،
+// ويسجّله عند ديسكورد تلقائياً. ويرسل الرابط لك برسالة خاصة عشان تعرف تفتح اللوحة.
+tunnel.onUrl = async (url) => {
+    process.env.PUBLIC_URL = url;
+    try {
+        const owner = await client.users.fetch(CONFIG.ARTHUR_ID);
+        await owner.send(`🌉 **رابط لوحة نوفا الجديد**\n${url}/dashboard\n\n_(الرابط يتغير كل إعادة تشغيل للبوت — البوت يسجّله عند ديسكورد تلقائياً)_`);
+    } catch {}
+};
+tunnel.start(PORT).catch((e) => console.error('🌉 خطأ النفق:', e.message));
 
 // تشغيل البوت. لو Server Members Intent مو مفعل نشغله بدونه (الترحيب وصفحة الأعضاء يتعطلون بس)
 // ولو فشل التشغيل (شبكة/توكن) يعيد المحاولة تلقائياً بتباعد متزايد بدل ما يوقف نهائياً
