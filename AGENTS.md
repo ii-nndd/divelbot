@@ -27,6 +27,7 @@
 | `admin.js` / `nlcommands.js` | أوامر الإدارة بالسلاش / بالكلام الطبيعي |
 | `economy.js` `games.js` `gamedata.js` `giveaway.js` `selfroles.js` `tickets.js` `jail.js` `trap.js` `welcome.js` `replies*.js` | بقية الأنظمة |
 | `AGENTS.md` `.env.example` `README.md` | التوثيق وسياق المشروع |
+| `render.yaml` / `تشغيل محلي.bat` | Blueprint لنشر الخدمة على Render من جديد بنقرة، وسكربت ويندوز يشغّل البوت من الجهاز (بدون استضافة) |
 
 **روم الفخ (`trap.js`) نظام مستقل تماماً** — الحظر التلقائي ما يتأثر بتعطيل البوت في الروم.
 
@@ -35,6 +36,8 @@
 - **GitHub**: `https://github.com/ii-nndd/novabot` — الفرع `main`.
 - **Render**: `https://divelbot.onrender.com` — **Auto-Deploy مفعّل**: أي push على `main` ينشر تلقائياً.
 - **لا يوجد مستودع/فرع آخر**؛ الرفع دائماً على `main`.
+- **مهم — إيقاف Render (Suspended)**: خطة Render المجانية تعطي **750 ساعة/شهر للحساب كامل**، والبوت بنبض البقاء 24/7 يستهلك ~744 ساعة → أي زيادة (خدمة ثانية، تداخل نشر) توقف **كل** الخدمات المجانية لبقية الشهر وتطلع صفحة `This service has been suspended` (503). الحل: `KEEPALIVE=0` (يوفّر الساعات بس البوت ينام)، أو ترقية الخدمة لخطة مدفوعة، أو تشغيل البوت من الجهاز عبر `تشغيل محلي.bat`. الاستهلاك يُتابع من Render ← Billing ← Monthly Included Usage.
+- **فحص الحالة**: `GET /health` يرجّع `200` لو الخدمة شغالة؛ لو رجع `503` مع `Service Suspended` فالإيقاف من Render مو من الكود (لا تعيد النشر ولا تدوّر خطأ بالبوت).
 
 ### أوامر النشر (بيئة هذا الجهاز)
 ```powershell
@@ -128,7 +131,7 @@ curl.exe -s -w "`nHTTP:%{http_code}`n" https://divelbot.onrender.com/dashboard/a
 
 **لم يُنفّذ بعد (عند الطلب):**
 - توحيد `"name"` في `package.json` من `voice-keeper-bot` إلى `nova`.
-- `render.yaml` كـ Blueprint، وملف `assetlinks.json` لربط APK.
+- `assetlinks.json` لربط APK.
 - تم تشغيل `npm install` محلياً (116 حزمة) للاختبار — و`node_modules/` مستثنى من Git.
 - غير مؤكد: هل `MONGODB_URI` مضبوط على Render (إذا لا، النقاط والمستويات ترجع أصفار).
 

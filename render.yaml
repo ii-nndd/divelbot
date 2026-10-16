@@ -1,0 +1,40 @@
+# ===== خطة نشر نوفا على Render (Blueprint) =====
+# هذا الملف اختياري: تستخدمه لو بغيت تنشئ الخدمة من جديد بنقرة وحدة
+# (Render Dashboard ➜ New ➜ Blueprint ➜ اختر مستودع novabot).
+# ملاحظة: القيم الفاضية (sync: false) راح يطلبها منك Render وقت الإنشاء — لا تحط أسرارك هنا.
+
+services:
+  - type: web
+    name: novabot
+    runtime: node
+    plan: free            # لو تبيه ما ينام أبداً رقّيه إلى starter
+    branch: main
+    autoDeploy: true
+    buildCommand: npm install
+    startCommand: node index.js
+    healthCheckPath: /health
+    envVars:
+      # --- إلزامي: البوت ---
+      - key: DISCORD_TOKEN
+        sync: false
+      # --- لوحة التحكم /dashboard (OAuth2) ---
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ADMIN_PASSWORD
+        sync: false
+      # --- التخزين الدائم (بدونها تضيع التعديلات عند كل restart) ---
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB
+        value: novabot
+      # --- اختياري ---
+      - key: MEMBERS_INTENT
+        value: "1"
+      # نبض البقاء: 1 = البوت ما ينام (يستهلك ~744 ساعة من أصل 750 ساعة مجانية بالشهر)
+      #              0 = الخدمة تنام لو ما فيه زيارات (يوفّر الساعات، بس البوت يطلع أوفلاين وقت النوم)
+      - key: KEEPALIVE
+        value: "1"

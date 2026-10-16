@@ -776,7 +776,9 @@ setInterval(() => {
 
 // نبض البقاء: يفتح /health كل 5 دقايق عشان استضافة Render المجانية ما تنيّم الخدمة
 // ملاحظة: الإقلاع البارد في Render المجاني ممكن ياخذ دقيقة، فالمهلة 90 ثانية
+// تحذير: إبقاء الخدمة صاحية 24/7 يستهلك ~744 ساعة من أصل 750 ساعة مجانية بالشهر → تقدر توقف النبض بـ KEEPALIVE=0
 const ALIVE_URL = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'https://divelbot.onrender.com').replace(/\/+$/, '');
+const KEEPALIVE_ON = String(process.env.KEEPALIVE ?? '1') !== '0';
 let keepAliveOk = false;
 async function keepAlive() {
     try {
@@ -793,8 +795,12 @@ async function keepAlive() {
         console.error('💓 تعذّر نبض البقاء (طبيعي وقت الإقلاع البارد):', err.message);
     }
 }
-setTimeout(keepAlive, 15_000);
-setInterval(keepAlive, 5 * 60_000);
+if (KEEPALIVE_ON) {
+    setTimeout(keepAlive, 15_000);
+    setInterval(keepAlive, 5 * 60_000);
+} else {
+    console.log('💓 نبض البقاء مطفي (KEEPALIVE=0) — الخدمة تنام لو ما فيه زيارات، عشان توفر ساعات Render المجانية');
+}
 
 setInterval(() => {
     const mb = process.memoryUsage().heapUsed / 1024 / 1024;
