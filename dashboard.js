@@ -109,7 +109,7 @@ function card(title,child){return el('div',{class:'card'},[title?el('div',{class
 function row(k){return el('div',{class:'row'},k)}
 function go(fn,msg,page){fn.then(function(){toast(msg||'تم ✅');if(page)show(page)}).catch(function(e){toast(e.message,1)})}
 var NOVA_MARK_SVG='<svg width="22" height="22" viewBox="0 0 100 100" style="vertical-align:-5px;margin-left:8px"><defs><radialGradient id="ngc" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff6e8"/><stop offset="45%" stop-color="#ff8a3d"/><stop offset="100%" stop-color="#b3121e"/></radialGradient></defs><g fill="url(#ngc)"><polygon points="50,6 58,42 94,50 58,58 50,94 42,58 6,50 42,42"/><polygon points="50,24 54,42 50,50 46,42" opacity="0"/></g><circle cx="50" cy="50" r="13" fill="url(#ngc)"/></svg>';
-function sw(on,fn){var i=el('input',{type:'checkbox'});i.checked=!!on;i.addEventListener('change',function(){fn(i.checked)});return el('span',{class:'tgl'},[i,el('span',{class:'sl'})])}
+function sw(on,fn){var i=el('input',{type:'checkbox'});i.checked=!!on;i.addEventListener('change',function(){fn(i.checked)});var l=el('label',{class:'tgl'},[i,el('span',{class:'sl'})]);l.title='اضغط للتبديل';return l}
 var pages={},cur='overview';
 var NAV=[['overview','نظرة عامة'],['bot','التحكم بالبوت'],['channels','الرومات'],['roles','الرتب'],['colors','رتب الألوان'],['members','الأعضاء'],['levels','المستويات'],['welcome','الترحيب'],['tickets','التذاكر'],['jail','السجن'],['trap','روم الفخ'],['bans','المحظورين'],['announce','الإعلانات'],['log','السجل']];
 function show(p){cur=p;var m=$('main');m.innerHTML='';[].forEach.call(document.querySelectorAll('.nav'),function(n){n.className='nav'+(n.dataset.p===p?' on':'')});pages[p](m).catch(function(e){toast(e.message,1)})}
