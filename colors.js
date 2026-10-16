@@ -189,7 +189,7 @@ async function applyPreset(g, gid, opts = {}) {
             if (linked) r = g.roles.cache.get(linked.id) || null;
         }
         if (!r) {
-            r = await g.roles.create({ name: label, color: p.hex, reason: 'تجهيز ألوان السيرفر الصريحة' });
+            r = await g.roles.create({ name: label, colors: { primaryColor: p.hex }, reason: 'تجهيز ألوان السيرفر الصريحة' });
             created++;
         } else if (!r.managed && String(r.hexColor || '').toLowerCase() !== p.hex.toLowerCase()) {
             await r.edit({ color: p.hex, reason: 'تصحيح كود اللون الصريح' });
@@ -231,7 +231,7 @@ async function addRole(g, gid, b = {}) {
         const color = hex(b.color);
         if (!name) throw new Error('اكتب اسم اللون');
         if (!color) throw new Error('اختر لون صحيح (مثال: #ff0055)');
-        r = await g.roles.create({ name, color, reason: 'إضافة لون من لوحة التحكم' });
+        r = await g.roles.create({ name, colors: { primaryColor: color }, reason: 'إضافة لون من لوحة التحكم' });
     }
     if (cfg.roles.some((x) => x.id === r.id)) throw new Error('هذا اللون مضاف من قبل');
     const top = g.members.me ? g.members.me.roles.highest.position : 0;
