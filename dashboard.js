@@ -174,8 +174,27 @@ box.appendChild(el('div',{class:'item'},k))});m.appendChild(box)})};
 pages.colors=function(m){return api('colors').then(function(d){var c=d.config;
 var nf=function(n){return Number(n||0).toLocaleString('en-US')};
 m.appendChild(el('h1',{text:'رتب الألوان'}));
-m.appendChild(el('div',{class:'mut',text:'نظام ألوان كامل: قائمة ألوان بروم مخصص يختار منها الأعضاء لونهم (لون واحد لكل عضو)، مع إدارة كاملة للألوان من هنا: إنشاء، ربط رتبة موجودة، تعديل، حذف، وتحديث البانل بنقرة وحدة.'}));
+m.appendChild(el('div',{class:'mut',text:'نظام ألوان كامل: قائمة ألوان بروم مخصص يختار منها الأعضاء لونهم (لون واحد لكل عضو)، مع إدارة كاملة للألوان من هنا: إنشاء، ربط رتبة موجودة، تعديل، حذف، وتحديث البانل بنقرة وحدة. الحد الأقصى '+d.max+' لون — لو زادت عن 25 تنقسم تلقائياً على قوائم (5 قوائم × 25).'}));
 if(d.needPerm)m.appendChild(card('',el('div',{class:'mut',style:'color:#ff8a8a',text:'⚠️ البوت ما عنده صلاحية Manage Roles أو رتبته مو فوق رتب الألوان — أعطه الصلاحية وارفعه فوق الألوان عشان الإدارة تشتغل.'})));
+
+var pre=el('div',{class:'card'});
+pre.appendChild(el('div',{class:'cat',text:'٠) تجهيز الألوان الصريحة ('+d.presets.length+' لون) 🎨'}));
+pre.appendChild(el('div',{class:'mut',text:'ينشئ هذي الألوان كرتب بالسيرفر بنفس الأكواد بالضبط، ويصحّح كود أي رتبة موجودة بنفس الاسم، ويخلي قائمة الألوان عليهم بالترتيب. (البوت يسويها تلقائياً أول اتصال لو القائمة فاضية).'}));
+var wrap=el('div',{class:'row',style:'margin:10px 0'});
+d.presets.forEach(function(p){wrap.appendChild(el('span',{class:'tag'},[el('span',{class:'sw',style:'background:'+p.color}),el('span',{text:' '+p.name+'  '+p.color})]))});
+pre.appendChild(wrap);
+var delOld=sw(false,function(){});
+pre.appendChild(el('div',{class:'item'},[el('span',{class:'nm',text:'احذف ألوان القائمة القديمة (اللي مو ضمن الألوان الصريحة) من السيرفر نهائياً'}),delOld]));
+pre.appendChild(el('div',{class:'row'},[el('button',{class:'btn',text:'🎨 تجهيز الألوان الصريحة الآن',on:{click:function(){
+  var b={deleteOld:delOld.querySelector('input').checked};
+  if(b.deleteOld&&!confirm('تأكيد: نحذف الألوان القديمة من السيرفر نهائياً (وتنشال من كل الأعضاء)؟'))return;
+  api('colors/preset',b).then(function(r){
+    var m='جهّزنا '+r.roles.length+' لون (جديد '+r.created+(r.fixed?' • مصحّح '+r.fixed:'')+(r.deleted?' • محذوف '+r.deleted:'')+')';
+    if(r.warn&&r.warn.length)m+=' — تنبيه: '+r.warn[0];
+    toast(m);show('colors');
+  }).catch(function(e){toast(e.message,1)})
+}}})]));
+m.appendChild(pre);
 
 var chs=el('select',{},[opt('','— اختر روم —')].concat(d.channels.map(function(x){return opt(x.id,'# '+x.name)})));chs.value=c.channelId||'';
 var ti=el('input',{placeholder:'عنوان قائمة الألوان',value:c.title||'',style:'flex:1;min-width:190px'});
@@ -690,6 +709,7 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
             config: colorCfg(g),
             max: colors.MAX,
             clear: colors.clearStatus(),
+            presets: colors.PRESETS.map(p => ({ key: p.key, name: colors.presetLabel(p), en: p.en, color: p.hex })),
             needPerm: !canManageRoles(g),
             channels: [...g.channels.cache.values()].filter(c => !c.isThread() && c.isTextBased() && !c.isVoiceBased())
                 .sort((a, b) => a.rawPosition - b.rawPosition).map(c => ({ id: c.id, name: c.name })),
@@ -698,8 +718,7 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
                 .map(r => ({ id: r.id, name: r.name, color: r.hexColor === '#000000' ? '#99aab5' : r.hexColor }))
         };
     }));
-    api.get('/colors/stats', h(async (g) => colors.stats(g, g.id)));
-    api.get('/colors/clear/status', h(async () => ({ clear: colors.clearStatus() })));
+    api.get('/colors/stats', h(async (g) => colors.stats(g, g.id)));    api.get('/colors/clear/status', h(async () => ({ clear: colors.clearStatus() })));
     api.post('/colors/save', h(async (g, b, req) => {
         if (b.channelId) {
             const c = chan(g, b.channelId);
@@ -723,6 +742,11 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         const r = await colors.delRole(g, g.id, b);
         note(req, b.deleteRole === true ? 'حذف رتبة لون نهائياً' : 'إزالة لون من قائمة الألوان');
         return { roles: r.roles, deleted: r.deleted };
+    }));
+    api.post('/colors/preset', h(async (g, b, req) => {
+        const r = await colors.applyPreset(g, g.id, { deleteOld: b.deleteOld === true });
+        note(req, `تجهيز الألوان الصريحة (${r.roles.length} لون • جديد ${r.created} • مصحّح ${r.fixed}${r.deleted ? ' • محذوف ' + r.deleted : ''})`);
+        return { roles: r.roles, created: r.created, fixed: r.fixed, oldCount: r.oldCount, deleted: r.deleted, warn: r.warn };
     }));
     api.post('/colors/panel', h(async (g, b, req) => {
         if (!canManageRoles(g)) throw new Error('البوت يحتاج صلاحية Manage Roles');

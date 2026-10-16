@@ -10,7 +10,9 @@ const store = require('./store');
 
 const FILE = 'colors.json';
 const MENU_ID = 'nova_colors';
-const MAX = 25;       // حد ديسكورد: 25 خيار بأي قائمة اختيار
+const MAX = 125;      // أقصى عدد ألوان: 5 قوائم × 25 خيار (حد ديسكورد لكل رسالة)
+const PER_MENU = 25;  // حد ديسكورد الواحد: 25 خيار بأي قائمة اختيار
+const MAX_MENUS = 5;  // حد ديسكورد: 5 صفوف (قوائم) بالرسالة الوحدة
 const EPH = MessageFlags.Ephemeral;
 
 const DEF = {
@@ -18,8 +20,28 @@ const DEF = {
     title: 'ألوان السيرفر 🎨',
     desc: 'اختر لونك من القائمة تحت. لو غيّرت رايك اختر لون ثاني وتتبدل رتبتك تلقائياً — لون واحد لكل عضو.',
     messageId: '',          // رسالة البانل (عشان نعدلها بدل ما نرسل من جديد)
-    roles: []               // [{ id, name, color }]
+    presetDone: false,      // هل جهزنا الألوان الصريحة الأساسية؟
+    roles: []               // [{ id, key, name, en, color }]
 };
+
+// الألوان الصريحة الأساسية (Standard Colors) — تُنشأ كرتب بالسيرفر بهذي الأكواد بالضبط
+const PRESETS = [
+    { key: 'black',      ar: 'أسود',        en: 'Black',      hex: '#010101' },
+    { key: 'white',      ar: 'أبيض',        en: 'White',      hex: '#FFFFFF' },
+    { key: 'red',        ar: 'أحمر',        en: 'Red',        hex: '#FF0000' },
+    { key: 'darkblue',   ar: 'أزرق غامق',   en: 'Dark Blue',  hex: '#002244' },
+    { key: 'lightblue',  ar: 'أزرق فاتح',   en: 'Light Blue', hex: '#1ABC9C' },
+    { key: 'green',      ar: 'أخضر',        en: 'Green',      hex: '#2ECC71' },
+    { key: 'yellow',     ar: 'أصفر',        en: 'Yellow',     hex: '#F1C40F' },
+    { key: 'orange',     ar: 'برتقالي',     en: 'Orange',     hex: '#D35400' },
+    { key: 'purple',     ar: 'بنفسجي',      en: 'Purple',     hex: '#8E44AD' },
+    { key: 'pink',       ar: 'وردي',        en: 'Pink',       hex: '#FF69B4' },
+    { key: 'brown',      ar: 'بني',         en: 'Brown',      hex: '#795548' },
+    { key: 'gray',       ar: 'رمادي',       en: 'Gray',       hex: '#4A4A4A' },
+    { key: 'navy',       ar: 'كحلي',        en: 'Navy',       hex: '#2A085C' },
+    { key: 'burgundy',   ar: 'عنابي',       en: 'Burgundy',   hex: '#800020' }
+];
+const presetLabel = (p) => `${p.ar} — ${p.en}`;
 
 const isId = (v) => (/^\d{5,25}$/.test(String(v || '')) ? String(v) : '');
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(String(s || '')) ? String(s) : '');
@@ -33,7 +55,13 @@ const get = (gid) => {
         ...DEF, ...c,
         roles: (Array.isArray(c.roles) ? c.roles : [])
             .filter((r) => r && isId(r.id))
-            .map((r) => ({ id: String(r.id), name: String(r.name || '').slice(0, 100), color: hex(r.color) || '#99aab5' }))
+            .map((r) => ({
+                id: String(r.id),
+                key: r.key ? String(r.key) : '',
+                name: String(r.name || '').slice(0, 100),
+                en: r.en ? String(r.en).slice(0, 40) : '',
+                color: hex(r.color) || '#99aab5'
+            }))
     };
 };
 
@@ -53,22 +81,40 @@ function set(gid, b = {}) {
     return writeCfg(gid, cfg);
 }
 
-// ===== بانل الألوان (Embed + القائمة) =====
+// ===== بانل الألوان (Embed + القائمة/القوائم) =====
 function panel(cfg) {
+    const n = cfg.roles.length;
     const e = new EmbedBuilder().setColor(0xb3121e).setTitle(cfg.title || DEF.title).setDescription(cfg.desc || DEF.desc);
-    if (cfg.roles.length) {
-        e.addFields({ name: `الألوان المتاحة (${cfg.roles.length})`, value: cfg.roles.slice(0, MAX).map((r) => '• ' + r.name).join('\n').slice(0, 1000) });
-        e.setFooter({ text: 'اختَر لونك من القائمة تحت 👇' });
+
+    if (n) {
+        // نوزّع أسماء الألوان على حقول (كل حقل حتى 1000 حرف) عشان ما تنقص أي ألوان
+        const fields = [];
+        let cur = '';
+        for (const r of cfg.roles) {
+            const line = '• ' + r.name + '\n';
+            if ((cur + line).length > 1000) { fields.push(cur.trim()); cur = ''; }
+            cur += line;
+        }
+        if (cur.trim()) fields.push(cur.trim());
+        fields.slice(0, 20).forEach((v, i) => e.addFields({ name: i === 0 ? `الألوان المتاحة (${n})` : '\u200b', value: v }));
+        e.setFooter({ text: n > PER_MENU ? `الألوان موزعة على ${Math.min(Math.ceil(n / PER_MENU), MAX_MENUS)} قوائم — اختر لونك من القوائم تحت 👇` : 'اختَر لونك من القائمة تحت 👇' });
     } else {
         e.setFooter({ text: 'ما فيه ألوان مضافة حالياً — تُضاف من لوحة التحكم.' });
     }
+
     const comps = [];
-    if (cfg.roles.length) {
+    const menus = Math.min(Math.ceil(n / PER_MENU) || 0, MAX_MENUS);
+    for (let m = 0; m < menus; m++) {
+        const chunk = cfg.roles.slice(m * PER_MENU, (m + 1) * PER_MENU);
         const menu = new StringSelectMenuBuilder()
-            .setCustomId(MENU_ID)
-            .setPlaceholder('🎨 اختر لونك')
+            .setCustomId(menus > 1 ? `${MENU_ID}:${m}` : MENU_ID)
+            .setPlaceholder(menus > 1 ? `🎨 اختر لونك (${m + 1}/${menus})` : '🎨 اختر لونك')
             .setMinValues(1).setMaxValues(1)
-            .addOptions(cfg.roles.slice(0, MAX).map((r) => ({ label: r.name.slice(0, 100) || 'لون', value: r.id, description: r.color })));
+            .addOptions(chunk.map((r) => ({
+                label: (r.name || 'لون').slice(0, 100),
+                value: r.id,
+                description: ((r.en ? r.en + ' • ' : '') + r.color).slice(0, 100)
+            })));
         comps.push(new ActionRowBuilder().addComponents(menu));
     }
     return { embeds: [e], components: comps };
@@ -98,6 +144,61 @@ async function sendPanel(g, gid, opts = {}) {
 
 // تحديث صامت بعد أي تعديل على الألوان (عشان القائمة تتبدل فوراً في السيرفر)
 const refreshQuiet = (g, gid) => sendPanel(g, gid).catch(() => null);
+
+// ===== تجهيز الألوان الصريحة (Standard Colors) =====
+const canManage = (g) => !!(g.members.me && g.members.me.permissions.has('ManageRoles'));
+
+// روم الألوان المحتمل (لو ما تحدد باللوحة) — ندوّر روم نصي باسم فيه "الوان" أو "color"
+function findColorChannel(g) {
+    return [...g.channels.cache.values()].find((c) =>
+        !c.isThread() && c.isTextBased() && !c.isVoiceBased() && /الوان|اللوان|رتب[-_ ]?الوان|colors?/i.test(c.name)) || null;
+}
+
+// ينشئ/يصحّح الألوان الصريحة الـ14 بالسيرفر ويخلي قائمة الألوان عليهم بالضبط
+async function applyPreset(g, gid, opts = {}) {
+    if (!canManage(g)) throw new Error('البوت يحتاج صلاحية Manage Roles لتجهيز الألوان');
+    const cfg = get(gid);
+    await g.roles.fetch();
+    const top = g.members.me ? g.members.me.roles.highest.position : 0;
+    const out = [], warn = [];
+    let created = 0, fixed = 0;
+
+    for (const p of PRESETS) {
+        const label = presetLabel(p);
+        // ندوّر الرتبة: بالاسم الصريح أول، وإلا بالربط السابق (المفتاح)
+        let r = g.roles.cache.find((x) => x.name === label) || null;
+        if (!r) {
+            const linked = cfg.roles.find((x) => x.key === p.key);
+            if (linked) r = g.roles.cache.get(linked.id) || null;
+        }
+        if (!r) {
+            r = await g.roles.create({ name: label, color: p.hex, reason: 'تجهيز ألوان السيرفر الصريحة' });
+            created++;
+        } else if (!r.managed && String(r.hexColor || '').toLowerCase() !== p.hex.toLowerCase()) {
+            await r.edit({ color: p.hex, reason: 'تصحيح كود اللون الصريح' });
+            fixed++;
+        }
+        if (r.position >= top) warn.push(`رتبتي لازم تكون أعلى من «${p.ar}» عشان أقدر أعطيها وأشيلها`);
+        out.push({ id: r.id, key: p.key, name: r.name, en: p.en, color: p.hex });
+    }
+
+    // الألوان القديمة: اللي كانت بالقائمة ومو ضمن الألوان الصريحة
+    const old = cfg.roles.filter((x) => !out.some((y) => y.id === x.id));
+    const deleted = [];
+    if (opts.deleteOld === true) {
+        for (const o of old) {
+            const r = g.roles.cache.get(o.id);
+            if (!r) continue;
+            try { await r.delete('حذف ألوان قديمة (تجهيز الألوان الصريحة)'); deleted.push(r.name); }
+            catch { warn.push(`ما قدرت أحذف «${o.name}»`); }
+        }
+    }
+
+    cfg.roles = out;
+    writeCfg(gid, cfg);
+    await refreshQuiet(g, gid);
+    return { roles: cfg.roles, created, fixed, oldCount: old.length, deleted: deleted.length, warn };
+}
 
 // ===== إدارة الألوان =====
 async function addRole(g, gid, b = {}) {
@@ -172,7 +273,7 @@ async function delRole(g, gid, b = {}) {
 
 // ===== قائمة الاختيار: العضو ياخذ لونه وتنشال عنه باقي الألوان =====
 async function handleSelect(i) {
-    if (!i.isStringSelectMenu() || i.customId !== MENU_ID) return false;
+    if (!i.isStringSelectMenu() || !String(i.customId).startsWith(MENU_ID)) return false;
     try {
         const cfg = get(i.guildId);
         const wanted = cfg.roles.find((r) => r.id === String(i.values[0]));
@@ -260,23 +361,45 @@ function init(client, CONFIG) {
     ensure(client, CONFIG);
 }
 
-// كل ما يرجع البوت أونلاين: نتأكد إن بانل الألوان موجود ومحدّث (وإذا انحذف نرسله من جديد)
+// كل ما يرجع البوت أونلاين: نجهّز الألوان الصريحة (مرة وحدة) ونتأكد إن البانل موجود ومحدّث
 function ensure(client, CONFIG, delay = 10_000) {
     const gid = CONFIG.GUILD_ID;
-    if (!get(gid).channelId) return;
     setTimeout(async () => {
         try {
             const g = client.guilds.cache.get(gid);
             if (!g || !client.isReady()) return;
-            const r = await sendPanel(g, gid);
-            console.log(`🎨 بانل الألوان ${r.edited ? 'انحدّث' : 'انرسل'}`);
+
+            // 1) تجهيز الألوان الصريحة تلقائياً أول مرة (لو ما فيه ألوان مضافة)
+            let cfg = get(gid);
+            if (!cfg.presetDone && cfg.roles.length === 0) {
+                try {
+                    const r = await applyPreset(g, gid, { deleteOld: false });
+                    cfg = get(gid); cfg.presetDone = true; writeCfg(gid, cfg);
+                    console.log(`🎨 تجهيز الألوان الصريحة: ${r.roles.length} لون (جديد ${r.created} • مصحّح ${r.fixed})`);
+                    r.warn.forEach((w) => console.warn('⚠️ ' + w));
+                } catch (e) { console.error('❌ تجهيز الألوان الصريحة:', e.message); }
+            }
+
+            // 2) تحديد روم الألوان تلقائياً لو ما تحدد من اللوحة
+            cfg = get(gid);
+            if (!cfg.channelId) {
+                await g.channels.fetch().catch(() => null);
+                const ch = findColorChannel(g);
+                if (ch) { cfg.channelId = ch.id; writeCfg(gid, cfg); console.log(`🎨 روم الألوان: #${ch.name}`); }
+            }
+
+            // 3) إرسال/تحديث البانل
+            if (get(gid).channelId) {
+                const r = await sendPanel(g, gid);
+                console.log(`🎨 بانل الألوان ${r.edited ? 'انحدّث' : 'انرسل'}`);
+            }
         } catch (e) { console.error('❌ بانل الألوان:', e.message); }
     }, delay);
 }
 
 module.exports = {
-    FILE, MENU_ID, MAX, DEF,
+    FILE, MENU_ID, MAX, PER_MENU, MAX_MENUS, DEF, PRESETS, presetLabel,
     get, set, panel, sendPanel, refreshQuiet, ensure, init,
-    addRole, editRole, delRole, handleSelect,
+    addRole, editRole, delRole, handleSelect, applyPreset, findColorChannel,
     startClear, clearStatus, stats
 };
