@@ -30,12 +30,20 @@ function init(client, CONFIG) {
             if (member && member.roles.cache.has(CONFIG.ROYAL_ROLE_ID)) return;
 
             await message.delete().catch(() => {});
-            await message.guild.members.ban(uid, { reason: '🪤 كتب برّوم الفخ (نظام مكافحة السبام/الراقات التلقائي)' });
+            // حظر نهائي (بدون مدة) لأي شخص يكتب أي حرف برّوم الفخ
+            await message.guild.members.ban(uid, { reason: '🪤 كتب برّوم الفخ (حظر نهائي تلقائي - نظام مكافحة السبام/الراقات)' });
+
+            // نسجّل المحظور عشان يبين بصفحة "المحظورين" بلوحة التحكم
+            try {
+                const rec = store.read('trapbans.json', {});
+                rec[uid] = { at: Date.now(), tag: message.author.tag, name: message.author.username };
+                store.write('trapbans.json', rec);
+            } catch {}
 
             if (CONFIG.LOG_CHANNEL_ID) {
                 try {
                     const log = await client.channels.fetch(CONFIG.LOG_CHANNEL_ID);
-                    await log.send(`🪤 حظر تلقائي: <@${uid}> (\`${uid}\`) كتب برّوم الفخ وانحظر فوراً.`);
+                    await log.send(`🪤 حظر نهائي تلقائي: <@${uid}> (\`${uid}\`) كتب برّوم الفخ وانحظر فوراً.`);
                 } catch {}
             }
         } catch (err) { console.error('❌ روم الفخ:', err.message); }
