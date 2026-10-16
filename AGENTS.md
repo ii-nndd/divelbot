@@ -94,6 +94,14 @@ curl.exe -s -w "`nHTTP:%{http_code}`n" https://divelbot.onrender.com/dashboard/a
 ## 8. الحالة الحالية
 
 **منجز ومُتحقق منه على الموقع الحقيقي:**
+- **حماية البقاء أونلاين 24/7** (آخر تعديل):
+  - قسم جديد في `index.js` باسم «11. حماية البقاء أونلاين 24/7»: هاندلرز `client.on('error'|'shardError'|'shardDisconnect'|'shardReconnecting'|'shardResume')` + `invalidated`.
+  - `safeLogin(reason)`: يعيد تسجيل الدخول (destroy + login) عند انتهاء الجلسة أو من الحارس، مع تهدئة تدريجية عند الفشل (2 → 4 → 8 → 16 → 32 دقيقة).
+  - `setInterval` كل دقيقة: لو البوت مو `isReady()` أكثر من المهلة يعيد الاتصال تلقائياً.
+  - `bootBot(attempt)`: التشغيل الأول مع إعادة محاولة بتباعد متزايد بدل التوقف نهائياً (وما زال يدعم الرجوع بدون Server Members Intent).
+  - **نبض بقاء**: `keepAlive()` يفتح `<PUBLIC_URL|RENDER_EXTERNAL_URL>/health` كل 5 دقايق (مهلة 90 ثانية للإقلاع البارد) عشان Render المجاني ما ينيّم الخدمة.
+  - `setOnline()` عند كل اتصال (`clientReady` صار `on` بدل `once`) + حارس الفويس ما يشتغل إلا بعد `client.isReady()`.
+  - `/health` صار يرجّع الحالة: `Nova 24/7 OK | bot=online|connecting | uptime=Ns` (وباقي يرجع 200).
 - إصلاح صفحة «المستويات»: زر «تعديل» كان يعرض النتيجة أسفل قائمة الـ25 متصدر (خارج الشاشة) → صار يفتح **نافذة منبثقة** (`openModal`) فيها المستوى، الترتيب، أشرطة تقدم (إجمالي/كتابي/صوتي) وباقي XP للمستوى القادم، مع أزرار حفظ/إضافة/خصم XP.
 - إضافة بطاقة **«حسابي 👤»** تُحمّل مستوى المستخدم المسجّل تلقائياً.
 - إضافة مسار **`GET /dashboard/api/levels/me`**.
@@ -103,7 +111,7 @@ curl.exe -s -w "`nHTTP:%{http_code}`n" https://divelbot.onrender.com/dashboard/a
 **لم يُنفّذ بعد (عند الطلب):**
 - توحيد `"name"` في `package.json` من `voice-keeper-bot` إلى `nova`.
 - `render.yaml` كـ Blueprint، وملف `assetlinks.json` لربط APK.
-- لم يتم تشغيل `npm install` محلياً (لا يوجد `node_modules`).
+- تم تشغيل `npm install` محلياً (116 حزمة) للاختبار — و`node_modules/` مستثنى من Git.
 - غير مؤكد: هل `MONGODB_URI` مضبوط على Render (إذا لا، النقاط والمستويات ترجع أصفار).
 
 ## 9. أسلوب العمل مع صاحب المشروع

@@ -54,10 +54,15 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 // الجذر يحوّل مباشرة للوحة التحكم، عشان أول ما تفتح رابط الموقع يطلع لك الداشبورد
 app.get('/', (req, res) => res.redirect('/dashboard'));
-// نقطة فحص بسيطة للاستضافة (Render) لو احتجتها
-app.get('/health', (req, res) => res.send('Voice Keeper Bot is running 24/7!'));
+// نقطة فحص للاستضافة (Render) — ترجع 200 دائماً عشان الخدمة ما تعتبر ميتة
+app.get('/health', (req, res) => {
+    const up = Math.floor(process.uptime());
+    res.status(200).send(`Nova 24/7 OK | bot=${client.isReady() ? 'online' : 'connecting'} | uptime=${up}s`);
+});
 mountPanel(app, express, R);
-app.listen(PORT, () => console.log(`🌐 Web server on port ${PORT}`));
+const webServer = app.listen(PORT, () => console.log(`🌐 Web server on port ${PORT}`));
+// أي خطأ في سيرفر الويب يتسجل فقط ولا يوقّف البوت
+webServer.on('error', (err) => console.error('⚠️ خطأ في سيرفر الويب:', err.message));
 
 // ====================================================================
 // 3. العميل
@@ -198,6 +203,7 @@ function disconnectFromVoice() {
 // حارس: كل دقيقة يتأكد إن البوت بالروم الصوتي الصح، وإلا يرجعه/ينقله
 setInterval(() => {
     if (connecting) return;
+    if (!client.isReady()) return;   // البوت مو مسجل دخول؟ ما نكرر محاولات الفويس عبث
     const target = voiceTargetId();
     const want = botcontrol.voiceEnabled(CONFIG.GUILD_ID) && !!target;
     // المفتاح مطفي أو ما فيه روم: نتأكد إن البوت خارج الفويس
@@ -256,9 +262,10 @@ const commands = [
 ].map(c => c.toJSON()).concat(admin.commands, points.commands, levels.commands, games.commands, tickets.commands, economy.commands, giveaway.commands, selfroles.commands);
 
 // ====================================================================
-// 7. تشغيل البوت
+// 7. تشغيل البوت (جاهز للعمل + إعادة التشغيل التلقائي)
 // ====================================================================
-client.once('clientReady', async () => {
+let systemsReady = false;   // الأنظمة تُهيأ مرة واحدة فقط (عشان ما تتكرر عند إعادة الاتصال)
+async function onClientReady() {
     console.log(`🤖 Logged in as ${client.user.tag}!`);
     try {
         const guild = await client.guilds.fetch(CONFIG.GUILD_ID);
@@ -267,15 +274,28 @@ client.once('clientReady', async () => {
     } catch (err) {
         console.error('❌ فشل تسجيل الأوامر:', err.message);
     }
-    await store.init();
-    R.reload();
-    points.init();
-    levels.init(client, CONFIG);
-    giveaway.reschedule(client);
-    jail.init(client);
-    trap.init(client, CONFIG);
+
+    if (!systemsReady) {
+        systemsReady = true;
+        await store.init();
+        R.reload();
+        points.init();
+        levels.init(client, CONFIG);
+        giveaway.reschedule(client);
+        jail.init(client);
+        trap.init(client, CONFIG);
+    }
+
+    // يخلي البوت يبيّن أونلاين دائماً (ولو أحد غيّر حالته لتختفي)
+    setOnline();
     connectToVoice();
-});
+}
+client.on('clientReady', onClientReady);
+
+// إجبار الحالة على "أونلاين" — أساس بقاء البوت ظاهر 24/7
+function setOnline() {
+    try { if (client.user) client.user.setStatus('online'); } catch {}
+}
 
 // ====================================================================
 // 8. معالج أوامر السلاش
@@ -638,9 +658,6 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 });
 
 // ====================================================================
-// 11. الأمان: منع الكراش + تنبيه الذاكرة
-// ====================================================================
-// ====================================================================
 // 10.5 حماية ارثر وإيدا: لو أحد كتمهم أو صمّمهم بالفويس يرجعون تلقائياً
 // ====================================================================
 const isRoyal = (id) => id === CONFIG.ARTHUR_ID || id === CONFIG.SPECIAL_USER_ID;
@@ -662,8 +679,84 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
     } catch {}
 });
 
+// ====================================================================
+// 11. حماية البقاء أونلاين 24/7: منع الكراش + إعادة الاتصال + نبض البقاء
+// ====================================================================
+// أي استثناء غير متوقع يتسجل فقط — البوت ما يتسكّر أبداً
 process.on('unhandledRejection', (err) => console.error('⚠️ unhandledRejection:', err));
 process.on('uncaughtException', (err) => console.error('⚠️ uncaughtException:', err));
+
+let botBooted = false;        // صار البوت جاهز أول مرة؟
+let lastAlive = Date.now();   // آخر لحظة كان البوت فيها متصل
+let loginBusy = false;        // فيه عملية (إعادة) تسجيل دخول شغالة؟
+let loginFails = 0;           // عدد محاولات إعادة الاتصال الفاشلة (للتهدئة التدريجية)
+
+// أي خطأ بالعميل أو بالبوابة يتسجل فقط، وdiscord.js يرجّع الاتصال لحاله
+client.on('error', (err) => console.error('⚠️ خطأ بالعميل:', err.message));
+client.on('shardError', (err) => console.error('⚠️ خطأ بالشبكة (shard):', err.message));
+client.on('shardDisconnect', (e, id) => console.error(`🔌 انقطع الاتصال (shard ${id}) كود ${e && e.code} — جاري إعادة الاتصال...`));
+client.on('shardReconnecting', (id) => console.log(`🔁 يعيد الاتصال (shard ${id})...`));
+client.on('shardResume', (id, n) => console.log(`✅ رجع الاتصال (shard ${id}) — أحداث معادة: ${n}`));
+
+// إعادة تسجيل دخول كاملة (تُستدعى من الجلسة المنتهية ومن الحارس)
+async function safeLogin(reason) {
+    if (loginBusy) return;
+    loginBusy = true;
+    try {
+        console.log(`🔐 إعادة تشغيل الاتصال (${reason})...`);
+        try { client.destroy(); } catch {}
+        await client.login(process.env.DISCORD_TOKEN);
+        lastAlive = Date.now();
+        loginFails = 0;
+        console.log('✅ البوت رجع أونلاين');
+    } catch (err) {
+        loginFails++;
+        console.error('❌ فشلت إعادة التشغيل:', err.message);
+    } finally {
+        loginBusy = false;
+    }
+}
+
+// الجلسة انتهت صلاحيتها (يعني الاتصال ما يرجع لحاله) → نعيد الدخول فوراً
+client.on('invalidated', () => {
+    console.error('♻️ انتهت صلاحية الجلسة — إعادة تسجيل الدخول تلقائياً');
+    safeLogin('invalidated');
+});
+
+// مهلة إعادة المحاولة تتباعد لو فشلت (2 → 4 → 8 → 16 → 32 دقيقة كحد أقصى)
+const reloginWait = () => 120_000 * Math.pow(2, Math.min(loginFails, 4));
+
+// حارس كل دقيقة: لو البوت مو متصل أكثر من مهلة الانتظار، نعيد تشغيل اتصاله
+setInterval(() => {
+    if (!botBooted || loginBusy) return;
+    if (client.isReady()) { lastAlive = Date.now(); return; }
+    if (Date.now() - lastAlive > reloginWait()) {
+        console.error('🛡️ الحارس: البوت مو متصل — إعادة تشغيل تلقائية');
+        safeLogin('watchdog');
+    }
+}, 60_000);
+
+// نبض البقاء: يفتح /health كل 5 دقايق عشان استضافة Render المجانية ما تنيّم الخدمة
+// ملاحظة: الإقلاع البارد في Render المجاني ممكن ياخذ دقيقة، فالمهلة 90 ثانية
+const ALIVE_URL = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'https://divelbot.onrender.com').replace(/\/+$/, '');
+let keepAliveOk = false;
+async function keepAlive() {
+    try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 90_000);
+        const res = await fetch(ALIVE_URL + '/health', { signal: ctrl.signal });
+        clearTimeout(timer);
+        if (!res.ok) { console.error('💓 نبض البقاء رجع كود', res.status); return; }
+        if (!keepAliveOk) {
+            keepAliveOk = true;
+            console.log(`💓 نبض البقاء شغال — البوت محمي من النوم (${ALIVE_URL})`);
+        }
+    } catch (err) {
+        console.error('💓 تعذّر نبض البقاء (طبيعي وقت الإقلاع البارد):', err.message);
+    }
+}
+setTimeout(keepAlive, 15_000);
+setInterval(keepAlive, 5 * 60_000);
 
 setInterval(() => {
     const mb = process.memoryUsage().heapUsed / 1024 / 1024;
@@ -671,19 +764,28 @@ setInterval(() => {
 }, 30 * 60_000);
 
 // تشغيل البوت. لو Server Members Intent مو مفعل نشغله بدونه (الترحيب وصفحة الأعضاء يتعطلون بس)
-(async () => {
+// ولو فشل التشغيل (شبكة/توكن) يعيد المحاولة تلقائياً بتباعد متزايد بدل ما يوقف نهائياً
+let intentFallbackDone = false;
+async function bootBot(attempt = 1) {
     try {
         await client.login(process.env.DISCORD_TOKEN);
+        lastAlive = Date.now();
+        botBooted = true;
+        if (attempt > 1) console.log(`🚀 البوت اشتغل بالمحاولة ${attempt}`);
     } catch (err) {
-        if (err.code === 'DisallowedIntents' || /disallowed intents|privileged intent/i.test(String(err.message))) {
+        const intentsIssue = err.code === 'DisallowedIntents'
+            || /disallowed intents|privileged intent/i.test(String(err.message));
+        if (intentsIssue && !intentFallbackDone) {
+            intentFallbackDone = true;
             console.error('⚠️ Server Members Intent مو مفعل في موقع المطورين، أشغل البوت بدونه (الترحيب وصفحة الأعضاء معطلين)');
-            try {
-                client.destroy();
-                client.options.intents.remove(GatewayIntentBits.GuildMembers);
-                await client.login(process.env.DISCORD_TOKEN);
-            } catch (e2) { console.error('❌ فشل تشغيل البوت:', e2.message); }
-        } else {
-            console.error('❌ فشل تشغيل البوت:', err.message);
+            try { client.destroy(); } catch {}
+            client.options.intents.remove(GatewayIntentBits.GuildMembers);
+            return bootBot(attempt);
         }
+        console.error('❌ فشل تشغيل البوت:', err.message);
+        const wait = Math.min(30_000 * attempt, 5 * 60_000);
+        console.log(`⏳ إعادة محاولة التشغيل بعد ${Math.round(wait / 1000)} ثانية...`);
+        setTimeout(() => bootBot(attempt + 1), wait);
     }
-})();
+}
+bootBot();
