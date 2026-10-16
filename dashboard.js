@@ -8,6 +8,7 @@ const store = require('./store');
 const welcome = require('./welcome');
 const tickets = require('./tickets');
 const jail = require('./jail');
+const trap = require('./trap');
 const points = require('./points');
 
 const BASE = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'https://divelbot.onrender.com';
@@ -92,7 +93,7 @@ function row(k){return el('div',{class:'row'},k)}
 function go(fn,msg,page){fn.then(function(){toast(msg||'تم ✅');if(page)show(page)}).catch(function(e){toast(e.message,1)})}
 var NOVA_MARK_SVG='<svg width="22" height="22" viewBox="0 0 100 100" style="vertical-align:-5px;margin-left:8px"><defs><radialGradient id="ngc" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff6e8"/><stop offset="45%" stop-color="#ff8a3d"/><stop offset="100%" stop-color="#b3121e"/></radialGradient></defs><g fill="url(#ngc)"><polygon points="50,6 58,42 94,50 58,58 50,94 42,58 6,50 42,42"/><polygon points="50,24 54,42 50,50 46,42" opacity="0"/></g><circle cx="50" cy="50" r="13" fill="url(#ngc)"/></svg>';
 var pages={},cur='overview';
-var NAV=[['overview','نظرة عامة'],['channels','الرومات'],['roles','الرتب'],['members','الأعضاء'],['welcome','الترحيب'],['tickets','التذاكر'],['jail','السجن'],['announce','الإعلانات'],['log','السجل']];
+var NAV=[['overview','نظرة عامة'],['channels','الرومات'],['roles','الرتب'],['members','الأعضاء'],['welcome','الترحيب'],['tickets','التذاكر'],['jail','السجن'],['trap','روم الفخ'],['announce','الإعلانات'],['log','السجل']];
 function show(p){cur=p;var m=$('main');m.innerHTML='';[].forEach.call(document.querySelectorAll('.nav'),function(n){n.className='nav'+(n.dataset.p===p?' on':'')});pages[p](m).catch(function(e){toast(e.message,1)})}
 pages.overview=function(m){return api('overview').then(function(d){m.appendChild(el('h1',{text:d.name}));m.appendChild(el('div',{class:'mut',text:'تحكم كامل بالسيرفر، والتعديل ينفذ فور الضغط'}));
 var s=el('div',{class:'stats'});[['الأعضاء',d.members],['الرومات',d.channels],['الرتب',d.roles]].forEach(function(x){s.appendChild(el('div',{class:'card'},[el('div',{class:'mut',text:x[0]}),el('div',{class:'big',text:String(x[1])})]))});m.appendChild(s)})};
@@ -173,6 +174,16 @@ m.appendChild(card('الإعدادات',el('div',{},[lab('تفعيل نظام ا
 m.appendChild(row([el('button',{class:'btn',text:'حفظ',on:{click:function(){go(api('jail/save',body()),'انحفظ ✅',null)}}}),
 el('button',{class:'b2',text:'🔄 مزامنة كل الرومات الآن',on:{click:function(){if(!confirm('بيتطبق منع الرؤية لرتبة السجن على كل رومات السيرفر الحالية، يكمل؟'))return;api('jail/save',body()).then(function(){return api('jail/sync',{})}).then(function(r){toast('تمت المزامنة: '+r.ok+'/'+r.total+' روم ✅')}).catch(function(e){toast(e.message,1)})}}})]));
 m.appendChild(el('div',{class:'mut',style:'margin-top:10px',text:'أي روم جديد تسويه بعدين ينزامن تلقائياً، ما يحتاج تضغط مزامنة من جديد.'}))})};
+pages.trap=function(m){return api('trap').then(function(d){var c=d.config;
+m.appendChild(el('h1',{text:'روم الفخ'}));
+m.appendChild(el('div',{class:'mut',text:'أي حد يكتب برّوم معين (غير المستثنيين بالآيدي تحت) ينحظر تلقائي فوراً. فعّال ضد بوتات السبام/الراقات اللي تكتب بكل روم تشوفه. ارثر وإيدا والرتبة الملكية محميين دايماً تلقائياً.'}));
+function sel(first,list,val){var s=el('select',{},[opt('',first)].concat(list.map(function(x){return opt(x.id,x.name)})));s.value=val||'';return s}
+var en=el('input',{type:'checkbox'});en.checked=c.enabled;
+var tc=sel('اختر روم الفخ',d.channels,c.channelId);
+var ex=el('textarea',{placeholder:'آيدي كل عضو أو بوت مستثنى، كل وحد بسطر لحاله'});ex.value=(c.exemptIds||[]).join('\n');
+function lab(t,k){return el('label',{class:'row',style:'margin:10px 0'},[k,el('span',{text:t})])}
+m.appendChild(card('الإعدادات',el('div',{},[lab('تفعيل روم الفخ',en),el('div',{class:'mut',text:'روم الفخ'}),tc,el('p'),el('div',{class:'mut',text:'آيديات مستثناة (بوتات ثانية عندك مثلاً)'}),ex])));
+m.appendChild(row([el('button',{class:'btn',text:'حفظ',on:{click:function(){api('trap/save',{enabled:en.checked,channelId:tc.value,exemptIdsText:ex.value}).then(function(){toast('انحفظ ✅')}).catch(function(e){toast(e.message,1)})}}})]))})};
 pages.log=function(m){return api('log').then(function(d){m.appendChild(el('h1',{text:'السجل'}));var b=el('div',{class:'card'});
 if(!d.log.length)b.appendChild(el('div',{class:'mut',text:'ما فيه إجراءات للحين'}));d.log.forEach(function(l){b.appendChild(el('div',{class:'item'},[el('span',{class:'nm',text:l.msg}),el('span',{class:'mut',text:l.by+' • '+new Date(l.at).toLocaleString('ar')})]))});m.appendChild(b)})};
 pages.members=function(m){m.appendChild(el('h1',{text:'الأعضاء'}));
@@ -507,6 +518,16 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         };
     }));
     api.post('/jail/save', h(async (g, b, req) => { jail.set(g.id, b); note(req, 'تعديل إعدادات السجن'); }));
+
+    api.get('/trap', h(async (g) => {
+        await g.channels.fetch();
+        const ch = [...g.channels.cache.values()].filter(c => c.type === ChannelType.GuildText);
+        return { config: trap.get(g.id), channels: ch.map(c => ({ id: c.id, name: '# ' + c.name })) };
+    }));
+    api.post('/trap/save', h(async (g, b, req) => {
+        const saved = trap.set(g.id, b);
+        note(req, `تعديل إعدادات روم الفخ (${saved.enabled ? 'مفعل' : 'معطل'})`);
+    }));
     api.post('/jail/sync', h(async (g, b, req) => {
         const cfg = jail.get(g.id);
         if (!cfg.roleId) throw new Error('اختر رتبة السجن واحفظ أول');

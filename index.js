@@ -19,6 +19,7 @@ const economy = require('./economy');
 const giveaway = require('./giveaway');
 const selfroles = require('./selfroles');
 const jail = require('./jail');
+const trap = require('./trap');
 const mountPanel = require('./panel');
 
 // ====================================================================
@@ -239,6 +240,7 @@ client.once('clientReady', async () => {
     points.init();
     giveaway.reschedule(client);
     jail.init(client);
+    trap.init(client, CONFIG);
     connectToVoice();
 });
 
