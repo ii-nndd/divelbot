@@ -6,8 +6,11 @@
 // redirect_uri غير مشفّر. هذا الملف:
 //   1) ينزّل binary cloudflared الرسمي (مجاني، بلا حساب، بلا دومين، بلا بطاقة).
 //   2) يشغّله نفق سريع على منفذ البوت → يطلع رابط https://xxx.trycloudflare.com.
-//   3) يحدّث redirect URI عند ديسكورد تلقائياً (PATCH /applications/@me)
-//      عشان تسجيل دخول اللوحة يشتغل بدون أي خطوة يدوية من صاحب المشروع.
+//   3) يُبلّغ عن رابط اللوحة (رسالة خاصة + الكونسول) ويسجّله عند ديسكورد.
+//      ⚠️ درس مُختبر (١٧ أكتوبر ٢٠٢٦): ديسكورد **لا يطبّق** redirect_uris المبعوثة عبر
+//      PATCH /applications/@me (يرجع 200 ويتجاهلها) → تسجيل الدخول يطلع
+//      «Invalid OAuth2 redirect_uri» حتى تسجّله يدوياً من بوابة المطورين.
+//      لذلك نتحقق بإعادة القراءة، ولو ما انسجّل نطبع الرسالة ونرسل الخطوة اليدوية.
 //
 // ⚠️ ملف cloudflared ما يُرفع إلى Git أبداً (مستثنى في .gitignore) — يُنزّل عند أول تشغيل.
 // ⚠️ على Render أو أي استضافة تعطي HTTPS أصلاً: اترك TUNNEL فارغ (لا نشغّل النفق).
@@ -44,27 +47,40 @@ async function ensureBinary() {
     console.log(`🌉 تم التنزيل (${(buf.length / 1048576).toFixed(1)} MB)`);
 }
 
-// تسجيل رابط اللوحة كـredirect URI عند ديسكورد (الرابط يتغير كل إقلاع، فنسجّله آلياً)
+// تسجيل رابط اللوحة كـredirect URI عند ديسكورد.
+// ⚠️ مُختبر: ديسكورد يرجّع 200 على PATCH بس ما يطبّق redirect_uris → لازم تحقّق + خطوة يدوية.
 async function registerRedirect(base) {
     const token = process.env.DISCORD_TOKEN;
-    if (!token) return;
-    const headers = { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' };
     const want = base + '/auth/callback';
-    const app = await (await fetch(`${DISCORD_API}/applications/@me`, { headers })).json();
-    if (!app || !app.id) {
-        console.error('🌉 تعذّر قراءة تطبيق ديسكورد:', app && app.message ? app.message : 'رد غير متوقع');
-        return;
+    if (!token) return { ok: false, want, reason: 'ما فيه DISCORD_TOKEN' };
+    const headers = { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' };
+    try {
+        const app = await (await fetch(`${DISCORD_API}/applications/@me`, { headers })).json();
+        if (!app || !app.id) {
+            console.error('🌉 تعذّر قراءة تطبيق ديسكورد:', app && app.message ? app.message : 'رد غير متوقع');
+            return { ok: false, want, reason: 'تعذّر قراءة التطبيق' };
+        }
+        if ((app.redirect_uris || []).includes(want)) {
+            console.log('🌉 رابط اللوحة مسجّل عند ديسكورد من قبل ✓');
+            return { ok: true, want };
+        }
+        const list = [...new Set([...(app.redirect_uris || []), want])].slice(-10);   // حد ديسكورد ١٠ روابط
+        const r = await fetch(`${DISCORD_API}/applications/@me`, {
+            method: 'PATCH', headers, body: JSON.stringify({ redirect_uris: list })
+        });
+        // نتحقق فعلياً بإعادة القراءة (ديسكورد يرجّع 200 ويتجاهل الحقل)
+        const after = await (await fetch(`${DISCORD_API}/applications/@me`, { headers })).json();
+        if ((after.redirect_uris || []).includes(want)) {
+            console.log('🌉 سجّلت رابط اللوحة عند ديسكورد تلقائياً ✓');
+            return { ok: true, want };
+        }
+        console.warn('🌉 ⚠️ ديسكورد ما طبّق الرابط (كود ' + r.status + ') — سجّله يدوياً:\n' +
+            '    OAuth2 → Redirects → Add Redirect → ' + want + ' → Save Changes');
+        return { ok: false, want, reason: 'بوابة ديسكورد ما تطبّق redirect_uris عبر الـAPI' };
+    } catch (e) {
+        console.error('🌉 خطأ تسجيل الرابط عند ديسكورد:', e.message);
+        return { ok: false, want, reason: e.message };
     }
-    const list = [...new Set([...(app.redirect_uris || []), want])].slice(-10);   // حد ديسكورد ١٠ روابط
-    if ((app.redirect_uris || []).includes(want)) {
-        console.log('🌉 رابط اللوحة مسجّل عند ديسكورد من قبل ✓');
-        return;
-    }
-    const r = await fetch(`${DISCORD_API}/applications/@me`, {
-        method: 'PATCH', headers, body: JSON.stringify({ redirect_uris: list })
-    });
-    if (r.ok) console.log('🌉 سجّلت رابط اللوحة عند ديسكورد تلقائياً ✓');
-    else console.error('🌉 فشل تسجيل الرابط عند ديسكورد:', r.status, (await r.text()).slice(0, 200));
 }
 
 // تأكيد إن الرابط صار يوصل فعلاً (نطاقات النفق تحتاج ~دقيقة لين تنتشر في DNS)
@@ -101,7 +117,9 @@ function spawnTunnel(port, protocol) {
             if (typeof module.exports.onUrl === 'function') {
                 module.exports.onUrl(publicUrl);
             }
-            registerRedirect(publicUrl).catch((e) => console.error('🌉 خطأ تسجيل الرابط:', e.message));
+            registerRedirect(publicUrl)
+                .then((info) => { if (typeof module.exports.onRedirect === 'function') module.exports.onRedirect(info); })
+                .catch((e) => console.error('🌉 خطأ تسجيل الرابط:', e.message));
             verify(publicUrl);
         }
     };
@@ -149,4 +167,4 @@ async function start(port) {
     return true;
 }
 
-module.exports = { start, getUrl: () => publicUrl, onUrl: null };
+module.exports = { start, getUrl: () => publicUrl, onUrl: null, onRedirect: null };

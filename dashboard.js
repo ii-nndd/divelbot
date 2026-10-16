@@ -39,6 +39,8 @@ const setCookie = (res, n, v, age) =>
 
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
+// رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
+const BUILD = '2026-10-17.1';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -105,7 +107,16 @@ var $=function(i){return document.getElementById(i)};
 function el(t,p,k){var e=document.createElement(t);p=p||{};for(var a in p){if(a==='text')e.textContent=p[a];else if(a==='on'){for(var v in p.on)e.addEventListener(v,p.on[v])}else if(a==='value')e.value=p[a];else e.setAttribute(a,p[a])}(k||[]).forEach(function(c){if(c)e.appendChild(c)});return e}
 function opt(v,t){return el('option',{value:v,text:t})}
 function toast(m,e){var t=$('toast');t.textContent=m;t.className=(e?'err ':'')+'on';setTimeout(function(){t.className=''},2400)}
-function api(p,b){return fetch('/dashboard/api/'+p,{method:b?'POST':'GET',headers:{'Content-Type':'application/json','x-dash':'1'},body:b?JSON.stringify(b):undefined}).then(function(r){return r.json().then(function(j){if(!r.ok){if(r.status===401)location.reload();throw new Error(j.error||'خطأ')}return j})})}
+function api(p,b){return callApi(p,b,0)}
+// نقرأ النص أولاً ثم نحوّله JSON: لو رجع HTML (نفق واقع، أو صفحة خطأ) نعيد المحاولة مرة للطلبات القرائية ونطلع رسالة عربية واضحة
+function callApi(p,b,tries){return fetch('/dashboard/api/'+p,{method:b?'POST':'GET',headers:{'Content-Type':'application/json','x-dash':'1'},body:b?JSON.stringify(b):undefined}).then(function(r){return r.text().then(function(t){
+  var j=null;try{j=JSON.parse(t)}catch(e){
+    if(!b&&tries<1)return new Promise(function(s){setTimeout(s,800)}).then(function(){return callApi(p,b,tries+1)});
+    throw new Error('رد غير متوقع من السيرفر (كود '+r.status+') — حدّث الصفحة (Ctrl+F5) وتأكد من الإنترنت');
+  }
+  if(!r.ok){if(r.status===401)location.reload();throw new Error(j.error||'خطأ')}
+  return j;
+})})}
 function card(title,child){return el('div',{class:'card'},[title?el('div',{class:'cat',text:title}):null,child])}
 function row(k){return el('div',{class:'row'},k)}
 function go(fn,msg,page){fn.then(function(){toast(msg||'تم ✅');if(page)show(page)}).catch(function(e){toast(e.message,1)})}
@@ -115,7 +126,14 @@ var pages={},cur='overview';
 var NAV=[['overview','نظرة عامة'],['bot','التحكم بالبوت'],['channels','الرومات'],['roles','الرتب'],['colors','رتب الألوان'],['members','الأعضاء'],['levels','المستويات'],['welcome','الترحيب'],['tickets','التذاكر'],['jail','السجن'],['trap','روم الفخ'],['bans','المحظورين'],['announce','الإعلانات'],['log','السجل']];
 function show(p){cur=p;var m=$('main');m.innerHTML='';[].forEach.call(document.querySelectorAll('.nav'),function(n){n.className='nav'+(n.dataset.p===p?' on':'')});pages[p](m).catch(function(e){toast(e.message,1)})}
 pages.overview=function(m){return api('overview').then(function(d){m.appendChild(el('h1',{text:d.name}));m.appendChild(el('div',{class:'mut',text:'تحكم كامل بالسيرفر، والتعديل ينفذ فور الضغط'}));
-var s=el('div',{class:'stats'});[['الأعضاء',d.members],['الرومات',d.channels],['الرتب',d.roles]].forEach(function(x){s.appendChild(el('div',{class:'card'},[el('div',{class:'mut',text:x[0]}),el('div',{class:'big',text:String(x[1])})]))});m.appendChild(s)})};
+var s=el('div',{class:'stats'});[['الأعضاء',d.members],['الرومات',d.channels],['الرتب',d.roles]].forEach(function(x){s.appendChild(el('div',{class:'card'},[el('div',{class:'mut',text:x[0]}),el('div',{class:'big',text:String(x[1])})]))});m.appendChild(s);
+var tc=el('div',{class:'card'});
+tc.appendChild(el('div',{class:'cat',text:'فحص اللوحة 🔌'}));
+tc.appendChild(el('div',{class:'mut',text:'إصدار اللوحة: '+(d.build||'؟')+' — لو طلع أي خطأ عند الضغط على الأزرار، اضغط الزر تحت وصوّر لنا النتيجة.'}));
+var tst=el('div',{class:'mut',style:'margin-top:8px'});
+tc.appendChild(el('div',{class:'row',style:'margin-top:8px'},[el('button',{class:'b2',text:'🔍 فحص الاتصال الآن',on:{click:function(){tst.textContent='جاري الفحص...';api('ping').then(function(r){tst.textContent='✅ الاتصال سليم — البوت '+(r.bot?'شغال':'غير جاهز')+' • مدة التشغيل '+r.mins+' دقيقة • إصدار '+r.build}).catch(function(e){tst.textContent='❌ '+e.message})}}})]));
+tc.appendChild(tst);
+m.appendChild(tc)})};
 pages.bot=function(m){return api('bot').then(function(d){var c=d.config;
 m.appendChild(el('h1',{text:'التحكم بالبوت'}));
 m.appendChild(el('div',{class:'mut',text:'حدّد الرومات المسموح للبوت يتفاعل فيها، وفعّل/عطّل البوت في أي روم بنقرة وحدة. في وضع "الرومات المحددة فقط" البوت يتجاهل أي رسالة أو أمر خارج الرومات المفعّلة تماماً. تنبيه: الحظر التلقائي في روم الفخ نظام مستقل وما يتأثر بهذي الإعدادات أبداً.'}));
@@ -525,7 +543,7 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
     const session = (req) => verify(cookies(req).dash);
     const redirectUri = () => BASE() + '/auth/callback';
 
-    app.get('/dashboard', (req, res) => res.type('html').send(PAGE));
+    app.get('/dashboard', (req, res) => res.type('html').set('Cache-Control', 'no-store').send(PAGE));
 
     // تثبيت اللوحة كتطبيق على الجوال (PWA)
     app.get('/manifest.webmanifest', (req, res) => res.type('application/manifest+json').send(JSON.stringify({
@@ -583,6 +601,8 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
     const api = express.Router();
     api.use(express.json({ limit: '100kb' }));
     api.get('/me', (req, res) => { const s = session(req); res.json({ enabled, user: s ? { id: s.id, name: s.name } : null }); });
+    // فحص سريع من المتصفح (بدون تسجيل دخول): يثبت أن السيرفر يرجع JSON فعلاً
+    api.get('/ping', (req, res) => res.json({ ok: true, build: BUILD, bot: client.isReady(), uptime: Math.round(process.uptime()), mins: Math.round(process.uptime() / 60), publicUrl: BASE() }));
     api.use((req, res, next) => {
         const s = enabled && session(req);
         if (!s) return res.status(401).json({ error: 'سجّل دخولك أول' });
@@ -610,7 +630,7 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
     const role = (g, id) => { const r = g.roles.cache.get(String(id)); if (!r || r.id === g.id) throw new Error('الرتبة مو موجودة'); return r; };
     const isCat = (c) => c.type === ChannelType.GuildCategory;
 
-    api.get('/overview', h(async (g) => ({ name: g.name, members: g.memberCount, channels: g.channels.cache.size, roles: g.roles.cache.size })));
+    api.get('/overview', h(async (g) => ({ name: g.name, members: g.memberCount, channels: g.channels.cache.size, roles: g.roles.cache.size, build: BUILD })));
     api.get('/log', h(async () => ({ log: store.read('dashlog.json', []) })));
 
     api.get('/channels', h(async (g) => {
@@ -1056,6 +1076,17 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         if (rec[id]) { delete rec[id]; store.write('trapbans.json', rec); }
         note(req, `فك حظر: ${id}`);
     }));
+
+    // أي مسار API غير معروف يرجّع JSON وليس صفحة HTML (كان يرجّع HTML 404 لما تكون الجلسة صالحة => يطلع خطأ «Unexpected token '<'» بالمتصفح)
+    api.use((req, res) => {
+        console.error('⚠️ مسار API غير معروف:', req.method, req.originalUrl);
+        res.status(404).json({ error: 'مسار غير معروف: ' + req.path });
+    });
+    // أي خطأ بالطلب نفسه (JSON مكسور، حجم كبير) يرجّع JSON كذلك
+    api.use((err, req, res, next) => {
+        console.error('⚠️ خطأ بالطلب:', req.method, req.originalUrl, err && err.message);
+        res.status((err && err.status) || 400).json({ error: 'طلب غير صالح: ' + String((err && err.message) || '').slice(0, 120) });
+    });
 
     app.use('/dashboard/api', api);
 };

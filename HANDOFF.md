@@ -34,7 +34,7 @@
 | **Wispbyte** | ٥١٢MB · ١GB · ٢٤/٧ بلا نوم · بلا بطاقة · **بلا ديسكورد** · دخول كل أسبوعين · نود أوروبي يوصل لديسكورد | ✅ **مُجرّب وشغّال** |
 | HeavenCloud | ٧١٥MB · تجديد كل ٧ أيام · **إلزامي الانضمام لسيرفرهم بالديسكورد** — أعطى `Failed to create: Could not establish a connection to the machine` وقت التجربة | 🅿️ بديل جاهز |
 | **MongoDB Atlas M0** | ٥١٢MB مجاناً للأبد · بلا بطاقة → الحفظ الدائم | ✅ شغال |
-| **نفق Cloudflare** (`tunnel.js`) | ينزّل `cloudflared`، يطلع رابط HTTPS، يحطه في `PUBLIC_URL`، **ويسجّل `redirect_uri` عند ديسكورد آلياً** + يرسل الرابط برسالة خاصة | ✅ شغال |
+| **نفق Cloudflare** (`tunnel.js`) | ينزّل `cloudflared`، يطلع رابط HTTPS، يحطه في `PUBLIC_URL`، يرسل الرابط برسالة خاصة + الكونسول، **وكشف أن Discord لا يطبّق `redirect_uri` عبر الـAPI** → يُسجّل يدوياً من `OAuth2 → Redirects` (والبوت يرسل الخطوة بالخاص لو فشل) | ✅ شغال |
 | Oracle / Google / AWS / Northflank / Fly / Railway / Koyeb | كلها تحتاج بطاقة (Oracle يرفض الافتراضية) | ❌ |
 | جهاز المستخدم (لابتوب) | غير معتمد ٢٤/٧ | ⚠️ طارئ فقط |
 

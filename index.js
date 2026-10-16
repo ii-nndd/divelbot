@@ -813,12 +813,20 @@ setInterval(() => {
 // ====================================================================
 // على Render ما نحتاجه (Render يعطي رابط HTTPS). على HeavenCloud/Wispbyte (Pterodactyl)
 // هذا اللي يخلي اللوحة /dashboard تشتغل: ينزّل cloudflared، يشغّله، ياخذ رابط HTTPS،
-// ويسجّله عند ديسكورد تلقائياً. ويرسل الرابط لك برسالة خاصة عشان تعرف تفتح اللوحة.
+// ويرسل الرابط لك برسالة خاصة عشان تعرف تفتح اللوحة.
 tunnel.onUrl = async (url) => {
     process.env.PUBLIC_URL = url;
     try {
         const owner = await client.users.fetch(CONFIG.ARTHUR_ID);
-        await owner.send(`🌉 **رابط لوحة نوفا الجديد**\n${url}/dashboard\n\n_(الرابط يتغير كل إعادة تشغيل للبوت — البوت يسجّله عند ديسكورد تلقائياً)_`);
+        await owner.send(`🌉 **رابط لوحة نوفا الجديد**\n${url}/dashboard\n\n_(الرابط يتغير كل إعادة تشغيل للبوت. لو طلع «Invalid OAuth2 redirect_uri» أضف ${url}/auth/callback في OAuth2 → Redirects)_`);
+    } catch {}
+};
+// ⚠️ مُختبر ١٧ أكتوبر: ديسكورد ما يطبّق redirect_uris عبر الـAPI → نرسل الخطوة اليدوية لو فشل التسجيل
+tunnel.onRedirect = async (info) => {
+    if (!info || info.ok) return;
+    try {
+        const owner = await client.users.fetch(CONFIG.ARTHUR_ID);
+        await owner.send(`⚠️ **خطوة يدوية مطلوبة لتسجيل الدخول للوحة**\nديسكورد ما يطبّق Redirect URI آلياً (${info.reason}).\nافتح https://discord.com/developers/applications ← تطبيق البوت ← **OAuth2 → Redirects** ← Add Redirect ← والصق:\n${info.want}\nثم **Save Changes**.`);
     } catch {}
 };
 tunnel.start(PORT).catch((e) => console.error('🌉 خطأ النفق:', e.message));
