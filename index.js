@@ -25,6 +25,7 @@ const trap = require('./trap');
 const colors = require('./colors');
 const mountPanel = require('./panel');
 const tunnel = require('./tunnel');
+const tsfunnel = require('./tsfunnel');
 
 // ====================================================================
 // 1. الإعدادات (عدل الآي ديهات هنا فقط)
@@ -59,7 +60,8 @@ app.get('/', (req, res) => res.redirect('/dashboard'));
 // نقطة فحص للاستضافة (Render) — ترجع 200 دائماً عشان الخدمة ما تعتبر ميتة
 app.get('/health', (req, res) => {
     const up = Math.floor(process.uptime());
-    res.status(200).send(`Nova 24/7 OK | bot=${client.isReady() ? 'online' : 'connecting'} | uptime=${up}s`);
+    const share = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '';
+    res.status(200).send(`Nova 24/7 OK | bot=${client.isReady() ? 'online' : 'connecting'} | uptime=${up}s${share ? ' | ' + share : ''}`);
 });
 mountPanel(app, express, R);
 const webServer = app.listen(PORT, () => console.log(`🌐 Web server on port ${PORT}`));
@@ -809,18 +811,41 @@ setInterval(() => {
 }, 30 * 60_000);
 
 // ====================================================================
-// 12. نفق Cloudflare التلقائي (TUNNEL=1) — للاستضافات المجانية اللي ما تعطي HTTPS
+// 12. رابط اللوحة العام: Tailscale Funnel (رابط ثابت) ثم نفق Cloudflare (احتياطي)
 // ====================================================================
-// على Render ما نحتاجه (Render يعطي رابط HTTPS). على HeavenCloud/Wispbyte (Pterodactyl)
-// هذا اللي يخلي اللوحة /dashboard تشتغل: ينزّل cloudflared، يشغّله، ياخذ رابط HTTPS،
-// ويرسل الرابط لك برسالة خاصة عشان تعرف تفتح اللوحة.
-tunnel.onUrl = async (url) => {
+// على Render ما نحتاجها (Render يعطي رابط HTTPS أصلاً). على HeavenCloud/Wispbyte (Pterodactyl):
+//   • لو `TS_AUTHKEY` مضبوط → Tailscale Funnel: **رابط ثابت** https://<host>.<tailnet>.ts.net
+//     (تسجّل redirect_uri مرة وحدة وتنساه) — أنظف حل ومجاني بلا بطاقة وبلا دومين.
+//   • وإلا → نفق Cloudflare السريع (`TUNNEL=1`): رابط يتبدّل كل إقلاع.
+// الاثنان يرسلان الرابط لك برسالة خاصة.
+async function shareUrl(url, permanent) {
     process.env.PUBLIC_URL = url;
     try {
         const owner = await client.users.fetch(CONFIG.ARTHUR_ID);
-        await owner.send(`🌉 **رابط لوحة نوفا الجديد**\n${url}/dashboard\n\n_(الرابط يتغير كل إعادة تشغيل للبوت. لو طلع «Invalid OAuth2 redirect_uri» أضف ${url}/auth/callback في OAuth2 → Redirects)_`);
+        if (permanent) {
+            await owner.send(`🔒 **رابط لوحة نوفا الثابت** (ما يتغير أبداً)\n${url}/dashboard\n\nخطوة وحدة فقط (مرة واحدة): أضف هذا في **OAuth2 → Redirects → Add Redirect** ثم Save Changes:\n${url}/auth/callback`);
+        } else {
+            await owner.send(`🌉 **رابط لوحة نوفا المؤقت**\n${url}/dashboard\n\n_(الرابط يتغير كل إعادة تشغيل. لو طلع «Invalid OAuth2 redirect_uri» أضف ${url}/auth/callback في OAuth2 → Redirects)_`);
+        }
+    } catch {}
+}
+tunnel.onUrl = (url) => shareUrl(url, false);
+tsfunnel.onUrl = (url) => shareUrl(url, true);
+// أول مرة: Tailscale يطلب تفعيل Funnel بضغطة من المالك
+tsfunnel.onNeedFunnel = async (link) => {
+    try {
+        const owner = await client.users.fetch(CONFIG.ARTHUR_ID);
+        await owner.send(`🔑 **خطوة وحدة لتفعيل الرابط الثابت**\nاضغط هذا الرابط ووافق على تفعيل Funnel لهذا الجهاز:\n${link}\n\n_(البوت يعيد المحاولة لحاله كل دقيقتين — ما يحتاج تعيد تشغيل شي)_`);
     } catch {}
 };
+// لو ما انفعّل Funnel خلال ٦ دقايق → نفتح نفق Cloudflare مؤقتاً عشان ما تنقفل اللوحة
+let quickTunnelStarted = false;
+function startQuickTunnel() {
+    if (quickTunnelStarted) return;
+    quickTunnelStarted = true;
+    tunnel.start(PORT).catch((e) => console.error('🌉 خطأ النفق:', e.message));
+}
+tsfunnel.onFallback = () => startQuickTunnel();
 // ⚠️ مُختبر ١٧ أكتوبر: ديسكورد ما يطبّق redirect_uris عبر الـAPI → نرسل الخطوة اليدوية لو فشل التسجيل
 tunnel.onRedirect = async (info) => {
     if (!info || info.ok) return;
@@ -829,7 +854,10 @@ tunnel.onRedirect = async (info) => {
         await owner.send(`⚠️ **خطوة يدوية مطلوبة لتسجيل الدخول للوحة**\nديسكورد ما يطبّق Redirect URI آلياً (${info.reason}).\nافتح https://discord.com/developers/applications ← تطبيق البوت ← **OAuth2 → Redirects** ← Add Redirect ← والصق:\n${info.want}\nثم **Save Changes**.`);
     } catch {}
 };
-tunnel.start(PORT).catch((e) => console.error('🌉 خطأ النفق:', e.message));
+// نحاول الرابط الثابت (Tailscale Funnel) — ولو ما ضبط ننزل لنفق Cloudflare المؤقت
+tsfunnel.start(PORT)
+    .then((ok) => { if (!ok) startQuickTunnel(); })
+    .catch((e) => { console.error('🌒 خطأ Tailscale:', e.message); startQuickTunnel(); });
 
 // تشغيل البوت. لو Server Members Intent مو مفعل نشغله بدونه (الترحيب وصفحة الأعضاء يتعطلون بس)
 // ولو فشل التشغيل (شبكة/توكن) يعيد المحاولة تلقائياً بتباعد متزايد بدل ما يوقف نهائياً

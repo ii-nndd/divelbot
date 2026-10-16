@@ -173,6 +173,31 @@ DATA_DIR=/home/container/novabot-main/data
 - ⚠️ **لو ما فتح الرابط:** الأسباب المجرّبة — **VPN (ProtonVPN) شغال**، أو الشبكة تحجب `trycloudflare`، أو كاش DNS سلبي → طفّي الـVPN، أو افتحه من الجوال، أو غيّر DNS إلى `1.1.1.1`.
 - لو فشل النفق: **البوت يكمل شغال عادي**، بس اللوحة بلا رابط عام. لإلغائه: `TUNNEL=0`.
 
+### ٧-ب) ⭐ رابط ثابت للأبد — Tailscale Funnel (الأفضل)
+
+نفق Cloudflare السريع يعطي **رابط جديد كل إقلاع** → مع درس «Discord لا يطبّق `redirect_uri` آلياً» معناه إعادة تسجيل يدوية كل مرة. الحل النهائي: **Tailscale Funnel** في `tsfunnel.js`:
+
+- 🔒 **رابط ثابت**: `https://<TS_HOSTNAME>.<tailnet>.ts.net` — ما يتغيّر أبداً مهما أعدت التشغيل → تسجّل `redirect_uri` **مرة وحدة**.
+- 💳 **مجاني بلا بطاقة** (خطة Personal: ١٠٠ جهاز + Funnel بلا حدود) · 🌐 بلا دومين · 🚫 بلا شاشة تحذير (مو مثل ngrok).
+- 🐳 **يشتغل بلا root** عبر `--tun=userspace-networking` (مؤكد من مطوّري Tailscale: *“we regularly use Funnel in userspace mode”*)، والشهادات تُصدر من سيرفراتهم.
+- ⛔ المنافذ المسموحة في Funnel: `443` و`8443` و`10000` — نستخدم 443.
+
+**الخطوات (مرة وحدة):**
+1. أضف في `.env` داخل `novabot-main`:
+   ```
+   TS_AUTHKEY=tskey-auth-xxxxxxxx
+   TS_HOSTNAME=nova-bot
+   ```
+2. سجّل مجاناً: <https://login.tailscale.com/start> (Google/GitHub) — ⚠️ **ProtonVPN/NetShield يحجب `tailscale.com`** (فحصناه: `controlplane.tailscale.com` → `0.0.0.0`) → طفّي الحماية وقت التسجيل.
+3. **Admin console → Settings → Keys → Generate auth key** (فعّل *Reusable*) → انسخ المفتاح ← حطّه في `TS_AUTHKEY` (**لا تشاركه في أي محادثة**).
+4. **Restart** → الكونسول يطبع:
+   - `🌒 متصل ✓ (nova-bot.tailxxxx.ts.net) — أفعّل Funnel...`
+   - `🌒 ⚠️ لازم تفعّل Funnel مرة وحدة من هذا الرابط: https://login.tailscale.com/f/funnel?...` ← **اضغطه ووافق** (يوصل نفس الرابط برسالة خاصة).
+   - ثم `🌒 🔒 رابط اللوحة الثابت: https://nova-bot.tailxxxx.ts.net` ✅
+5. أضف مرة وحدة في Discord: `OAuth2 → Redirects → Add Redirect` ← `https://nova-bot.tailxxxx.ts.net/auth/callback` ← **Save Changes**. خلاص — **ما تحتاج تعيدها أبداً**.
+
+**سلوك البوت:** Tailscale أول، وإذا مو مضبوط/فشل → ينزل تلقائياً لنفق Cloudflare (`tunnel.js`). ولو Funnel ما انفعّل خلال ٦ دقايق يفتح نفق Cloudflare مؤقتاً عشان ما تنقفل اللوحة.
+
 ### ٨) تجديد كل أسبوعين
 
 ادخل لوحة Wispbyte **كل أسبوعين** مرة وإلا يتوقف السيرفر (وبعد ٣٠ يوم ينقل للتخزين **بلا حذف**). المجاني عندهم مدعوم بالإعلانات → **مانع الإعلانات مطفي** على موقعهم.

@@ -35,6 +35,7 @@
 | HeavenCloud | ٧١٥MB · تجديد كل ٧ أيام · **إلزامي الانضمام لسيرفرهم بالديسكورد** — أعطى `Failed to create: Could not establish a connection to the machine` وقت التجربة | 🅿️ بديل جاهز |
 | **MongoDB Atlas M0** | ٥١٢MB مجاناً للأبد · بلا بطاقة → الحفظ الدائم | ✅ شغال |
 | **نفق Cloudflare** (`tunnel.js`) | ينزّل `cloudflared`، يطلع رابط HTTPS، يحطه في `PUBLIC_URL`، يرسل الرابط برسالة خاصة + الكونسول، **وكشف أن Discord لا يطبّق `redirect_uri` عبر الـAPI** → يُسجّل يدوياً من `OAuth2 → Redirects` (والبوت يرسل الخطوة بالخاص لو فشل) | ✅ شغال |
+| ⭐ **Tailscale Funnel** (`tsfunnel.js`) | **رابط ثابت للأبد** `https://<host>.<tailnet>.ts.net` (مجاني بلا بطاقة · بلا دومين · بلا شاشة تحذير · بلا root) → تسجّل `redirect_uri` مرة وحدة وتنساه. البوت يميّز Tailscale أولاً وينزل لنفق Cloudflare لو مو مضبوط | ✅ مبني — ينتظر `TS_AUTHKEY` من صاحب المشروع |
 | Oracle / Google / AWS / Northflank / Fly / Railway / Koyeb | كلها تحتاج بطاقة (Oracle يرفض الافتراضية) | ❌ |
 | جهاز المستخدم (لابتوب) | غير معتمد ٢٤/٧ | ⚠️ طارئ فقط |
 

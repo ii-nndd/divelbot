@@ -28,3 +28,6 @@ assetlinks.json
 # نفق Cloudflare (binary يُنزَّل تلقائياً عند التشغيل — ما يُرفع أبداً)
 cloudflared
 cloudflared.exe
+
+# Tailscale Funnel (ثنائيات تُنزَّل تلقائياً للحصول على رابط ثابت — ما تُرفع أبداً)
+tailscale/

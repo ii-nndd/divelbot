@@ -34,7 +34,9 @@
 | `economy.js` `games.js` `gamedata.js` `giveaway.js` `selfroles.js` `tickets.js` `jail.js` `trap.js` `welcome.js` `replies*.js` | بقية الأنظمة |
 | `AGENTS.md` `.env.example` `README.md` | التوثيق وسياق المشروع |
 | `render.yaml` / `تشغيل محلي.bat` | Blueprint لنشر الخدمة على Render من جديد بنقرة، وسكربت ويندوز يشغّل البوت من الجهاز (بدون استضافة) |
-| `deploy/HOSTING.md` | ⭐ دليل إعادة تشغيل البوت بدون بطاقة بنكية: حساب Render جديد (خطوة بخطوة) + استضافة HeavenCloud/Wispbyte + MongoDB Atlas + قائمة تحقق تمنع تشغيل نسختين |
+| `tunnel.js` | نفق Cloudflare السريع (احتياطي): ينزّل `cloudflared` ويطلع رابط HTTPS مؤقت يتغير كل إقلاع |
+| `tsfunnel.js` | ⭐ **رابط ثابت للأبد** عبر Tailscale Funnel (`TS_AUTHKEY`): ينزّل ثنائيات Tailscale، يشغّل `tailscaled` بوضع userspace (بلا root)، ويفعّل Funnel على المنفذ 443 → `https://<TS_HOSTNAME>.<tailnet>.ts.net` |
+| `deploy/HOSTING.md` | ⭐ دليل إعادة تشغيل البوت بدون بطاقة بنكية: Wispbyte + `.env` + MongoDB Atlas + نفق Cloudflare + **Tailscale Funnel (الرابط الثابت)** + قائمة تحقق تمنع تشغيل نسختين |
 
 **روم الفخ (`trap.js`) نظام مستقل تماماً** — الحظر التلقائي ما يتأثر بتعطيل البوت في الروم.
 
@@ -54,6 +56,7 @@
   - **🚫 Render سقط:** الحسابات **الجديدة** صارت تطلب **بطاقة** حتى على الخطة المجانية (مُختبر ١٧ أكتوبر ٢٠٢٦) → لا يصلح لصاحب المشروع. الحساب **القديم** وراثي بدون بطاقة (يرجع ١ نوفمبر) → **لا يُحذف**، يُحذف منه الخدمات بس.
   - **المسار المعتمد**: استضافة بوت مجانية بلا بطاقة — **HeavenCloud** (٧١٥MB، ٢٤/٧، تجديد كل ٧ أيام، Pterodactyl) أو **Wispbyte** (٥١٢MB، دخول كل أسبوعين). أمر التشغيل: `npm install --omit=dev && node index.js`، `KEEPALIVE=0`، **`TUNNEL=1`**.
   - **MongoDB Atlas M0** (٥١٢MB مجاناً للأبد، بلا بطاقة) = مصدر الحفظ الدائم؛ بدونها تضيع البيانات مع أول إعادة نشر.
+  - ⭐ **الرابط الثابت (الأفضل): Tailscale Funnel** عبر `tsfunnel.js` (`TS_AUTHKEY` + `TS_HOSTNAME`) → `https://<host>.<tailnet>.ts.net` **ما يتغيّر أبداً** (مجاني بلا بطاقة · بلا دومين · بلا شاشة تحذير) → تسجّل `redirect_uri` **مرة وحدة**. يشتغل بلا root (`--tun=userspace-networking`). ومنافذ Funnel المسموحة: 443/8443/10000. الخلاصة بالتفصيل في `deploy/HOSTING.md` القسم ٧-ب.
   - **نفق Cloudflare التلقائي ✅ مبني ومُختبر** في `tunnel.js`: ينزّل `cloudflared`، يشغّل رابط HTTPS، يحطه في `PUBLIC_URL`، ويرسل الرابط برسالة خاصة + الكونسول. `dashboard.js` يقرأ `BASE()` وقت الطلب عشان يلتقط رابط النفق.
   - ⚠️ **درس مُختبر (١٧ أكتوبر ٢٠٢٦): Discord لا يطبّق `redirect_uris` عبر `PATCH /applications/@me`** (يرجّع 200 ويتجاهل الحقل) → تسجيل الدخول يطلع **«Invalid OAuth2 redirect_uri»**. الحل: أضف `<رابط النفق>/auth/callback` يدوياً من `Discord Developer Portal → OAuth2 → Redirects → Add Redirect → Save Changes` **كل مرة يتغير فيها الرابط** (البوت صار يتحقق من التسجيل ويرسل الخطوة اليدوية بالخاص لو فشل).
   - 🚫 **ممنوع نسختين شغالين بنفس التوكن**: لازم تُحذف خدمة Render القديمة قبل **١ نوفمبر** (ترجع تلقائياً وتشتغل مع الجديدة = البوت يرد مرتين).
@@ -83,6 +86,7 @@ curl.exe -s -w "`nHTTP:%{http_code}`n" https://divelbot.onrender.com/dashboard/a
 | `SESSION_SECRET` | توقيع جلسات اللوحة | للوحة |
 | `PUBLIC_URL` / `RENDER_EXTERNAL_URL` | رابط النشر (Redirect URI) | للوحة |
 | `MONGODB_URI` / `MONGODB_DB` | التخزين الدائم (بدونها تضيع التعديلات عند كل restart) | مستحسن |
+| `TS_AUTHKEY` / `TS_HOSTNAME` | **رابط ثابت للأبد** عبر Tailscale Funnel (مجاني بلا بطاقة) — بديل نفق Cloudflare المتغيّر | مستحسن |
 | `ADMIN_PASSWORD` | `/panel` | للوحة الردود |
 | `MEMBERS_INTENT=1` | البحث بالاسم + الترحيب | اختياري |
 | `PORT` / `DATA_DIR` | منفذ الويب ومجلد البيانات | اختياري |
@@ -127,6 +131,7 @@ curl.exe -s -w "`nHTTP:%{http_code}`n" https://divelbot.onrender.com/dashboard/a
 - درس عملي: **لا تكتب `\n` داخل أمر التشغيل** — محرر البانل يحوّله إلى سطر جديد فعلي فينكسر الأمر (`SyntaxError: Unexpected end of input`) ويصير crash loop.
 
 **منجز ومُتحقق منه على الموقع الحقيقي:**
+- ⭐ **رابط ثابت للأبد عبر Tailscale Funnel** (`tsfunnel.js` جديد + توصيل في `index.js`): ينزّل ثنائيات Tailscale (آخر إصدار من `pkgs.tailscale.com` — يفك الأرشيف بـ`tar` وإلا بفاك أرشيف داخلي بـzlib)، يشغّل `tailscaled --tun=userspace-networking` (بلا root)، يعمل `up --authkey`، ثم `funnel --bg --https=443` → **رابط ثابت** `https://<TS_HOSTNAME>.<tailnet>.ts.net`. يميّز رسالة «فعّل Funnel من هذا الرابط» ويرسلها بالخاص، ويعيد المحاولة كل دقيقتين (٢٠ مرة)، ولو ما انفعّل خلال ٦ دقايق يفتح نفق Cloudflare مؤقتاً (ما تنقفل اللوحة). مُختبر محلياً: فك الأرشيف + اختيار آخر إصدار (HTML/JSON/amd64/arm64) + الرجوع الآمن بلا مفتاح. `.env.example` + `.gitignore` محدّثان. **المتبقّي على صاحب المشروع: تسجيل Tailscale + `TS_AUTHKEY` + ضغطة تفعيل Funnel.**
 - **تحصين اللوحة ضد خطأ `Unexpected token '<'` + تشخيص ذاتي** (`dashboard.js`, `tunnel.js`, `index.js`):
   - واجهة اللوحة (`api()`) صارت تقرأ النص أولاً ثم تحوّله JSON: لو رجع **HTML** (نفق واقع/صفحة خطأ) تعيد المحاولة مرة للطلبات القرائية، وإلا تعرض رسالة عربية واضحة بدل خطأ الجافاسكربت الغامض.
   - **كل مسارات `/dashboard/api/*` ترجع JSON دائماً**: أُضيف هاندلر 404 JSON (كان يرجّع **صفحة HTML 404** لما تكون الجلسة صالحة = السبب الجذري المحتمل لخطأ `Unexpected token '<'`) + هاندلر أخطاء JSON لطلب مكسور/كبير.
