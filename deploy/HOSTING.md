@@ -62,7 +62,7 @@ Discord Developer Portal ← OAuth2 ← Redirects ← أضف `https://<اسم-خ
 ### ١) سجّل وأنشئ السيرفر
 1. <https://wispbyte.com/client/register> ← سجّل (زر **Discord** أو Google بنقرة وحدة).
 2. **`+ New server`** ← Runtime: **Node.js** (يطلع مختاراً) ← الاسم `NovaBot` ← **`Create server`**.
-3. ⚠️ لو ظهرت بوابة **«Adblock detected»**: طفّي مانع الإعلانات لهذا الموقع + **ProtonVPN / NetShield** (يحجبون على مستوى DNS وما ينفع معها حل المتصفح) ← **`Check again`**.
+3. ⚠️ لو ظهرت بوابة **«Adblock detected»**: طفّي مانع الإعلانات لهذا الموقع + أي **VPN/فلتر DNS** على شبكتك (يمنع فحصهم) ← **`Check again`**.
 
 ### ٢) ⚠️ اختر صورة Node يدوياً (فخ أول — يقتل الفويس)
 
@@ -183,13 +183,15 @@ DATA_DIR=/home/container/novabot-main/data
 - ⛔ المنافذ المسموحة في Funnel: `443` و`8443` و`10000` — نستخدم 443.
 
 **الخطوات (مرة وحدة):**
-1. أضف في `.env` داخل `novabot-main`:
+0. ⚠️ **افحص شبكة جهازك قبل أي شي:** `node deploy/check-net.js` ← لازم يطلع **عنوان الخروج من VPN (مو من مزوّد الخدمة)** + **«كل نطاقات Tailscale تشتغل»**. ولو طلع محجوب: شغّل/صحّح **ProtonVPN** (تأكد أن النفق يمرّر فعلاً — بعض المرات يقول *Connected* وهو ما يمرّر شي) وأعد الفحص. التفاصيل تحت في **استكشاف الأخطاء**.
+1. سجّل مجاناً: <https://login.tailscale.com/start> (Google/GitHub).
+2. **Admin console → Settings → Keys → Generate auth key** (فعّل *Reusable*) → انسخ المفتاح `tskey-auth-…`
+3. أضف في `.env` داخل `novabot-main`:
    ```
    TS_AUTHKEY=tskey-auth-xxxxxxxx
    TS_HOSTNAME=nova-bot
    ```
-2. سجّل مجاناً: <https://login.tailscale.com/start> (Google/GitHub) — ⚠️ **ProtonVPN/NetShield يحجب `tailscale.com`** (فحصناه: `controlplane.tailscale.com` → `0.0.0.0`) → طفّي الحماية وقت التسجيل.
-3. **Admin console → Settings → Keys → Generate auth key** (فعّل *Reusable*) → انسخ المفتاح ← حطّه في `TS_AUTHKEY` (**لا تشاركه في أي محادثة**).
+   ⚠️ المفتاح **سر** — لا يُكتب في Git ولا في المحادثة.
 4. **Restart** → الكونسول يطبع:
    - `🌒 متصل ✓ (nova-bot.tailxxxx.ts.net) — أفعّل Funnel...`
    - `🌒 ⚠️ لازم تفعّل Funnel مرة وحدة من هذا الرابط: https://login.tailscale.com/f/funnel?...` ← **اضغطه ووافق** (يوصل نفس الرابط برسالة خاصة).
@@ -255,7 +257,28 @@ DATA_DIR=/home/container/novabot-main/data
 | المستويات/النقاط كلها أصفار | `MONGODB_URI` مو مضبوط أو IP غير مسموح في Atlas. |
 | صورة الألوان ما تطلع | فشل الكانفس → البانل يرجع تلقائياً لقائمة نصية. تأكد من نجاح `npm install` على Linux. |
 | البوت يرد مرتين على كل رسالة | **فيه نسختين شغالين** — احذف وحدة (Render القديمة عادة). |
-| بوابة «Adblock detected» في Wispbyte | طفّي مانع الإعلانات + **NetShield/ProtonVPN** ← `Check again`. |
+| `tailscale.com` ما يفتح / `0.0.0.0` عند جهاز صاحب المشروع | **حجب المزوّد (OmanTel)**: تسميم DNS + قطع SNI/DPI + حجب DoH. شغّل **`node deploy/check-net.js`**، ولازم الترافيك يمرّ من VPN فعلاً (ملف `hosts` **ما ينفع**). |
+| بوابة «Adblock detected» في Wispbyte | طفّي مانع الإعلانات + VPN/أي حجب على شبكتك ← `Check again`. |
+
+---
+
+## 🌐 حجب `tailscale.com` عند صاحب المشروع (مُشخَّص بالتفصيل ١٧ أكتوبر ٢٠٢٦)
+
+**السبب: مزوّد الخدمة `OmanTel` (AS28885، صلالة/عُمان)** — مو NetShield ولا الـVPN. عنده ثلاث طبقات:
+
+| الطبقة | الدليل المُقاس | الملاحظة |
+|---|---|---|
+| **تسميم DNS** | `tailscale.com` / `login` / `controlplane` / `pkgs` كلها → `0.0.0.0` | حتى مع DNS على `1.1.1.1` (المزوّد يعترض منفذ ٥٣) |
+| **فحص SNI (DPI)** | نفس العنوان الحقيقي: **بلا SNI** = SSL ناجح بشهادة Tailscale سليمة، **مع SNI `x.tailscale.com`** = `ECONNRESET` خلال ~٢٠٠ms | يعني **ملف `hosts` ما ينفع** (القطع بالـSNI مو بالـDNS) |
+| **حجب DoH** | `dns.google` و`cloudflare-dns.com` ما تفتح | يمنع تحايل المتصفح بـDoH |
+
+**الحل:** **VPN يمرّر الترافيك فعلاً** (ProtonVPN يتخطى الثلاث طبقات — تحققنا: عناوين حقيقية + شهادات سليمة مع SNI).
+
+- ⚠️ **لا تعتمد على كلمة `Connected`** في واجهة ProtonVPN: صادفنا الحالة تقول Connected والواجهة الافتراضية **بلا أي مسار** والترافيك يطلع من IP المزوّد (`85.154.169.183`) → كل نطاقات Tailscale محجوبة.
+- ✅ **الأداة:** `node deploy/check-net.js` ← تطبع عنوان الخروج واسم الشركة + DNS + SNI + DoH + `*.ts.net`، وتحكم: «تقدر تسوي الخطوات الآن» أو «شغّل الـVPN».
+- ✅ **`*.ts.net` مو محجوب** → بعد ما يطلع الرابط الثابت، اللوحة تفتح من جهازه عادي.
+- ✅ **البوت ما يتأثر:** هو على شبكة Wispbyte (مو OmanTel)، فتنزيل `tsfunnel.js` لثنائيات Tailscale والاتصال بـcontrolplane يعمل من السيرفر بلا مشاكل.
+- 🔁 **بديل لو الـVPN ما ضبط:** يسوّي خطوات Tailscale (تسجيل + مفتاح + تفعيل Funnel) من **جهاز على شبكة ثانية** — بيانات الجوال على **نفس المزوّد** غالباً محجوبة كذلك.
 
 ---
 
@@ -267,4 +290,5 @@ DATA_DIR=/home/container/novabot-main/data
 - Oracle Cloud Free Tier: يطلب بطاقة إلزامية وما يقبل الافتراضية → مستثنى. وكذلك Google Cloud / AWS / Northflank / Fly.io / Railway / Koyeb.
 - MongoDB Atlas M0: ٥١٢MB مجاني للأبد · **بدون بطاقة** ✓.
 - bot-hosting.net: ٢٥٦MB · تجديد كل ٤ أيام · يعطي **رابط HTTPS** ✓ (الرام ضعيفة على حجم بوتنا).
+- 🇴🇲 **شبكة صاحب المشروع (١٧ أكتوبر):** مزوّد الخدمة **OmanTel (AS28885)** يحجب `tailscale.com` بتسميم DNS (`0.0.0.0`) **وفحص SNI/DPI** (`ECONNRESET` مع SNI فيه `tailscale.com`، وبلا SNI نفس العنوان يتصل بشهادة سليمة) **وحجب نطاقات DoH** (`dns.google`/`cloudflare-dns.com`). **NetShield/VPN مو السبب** — بالعكس: **ProtonVPN يتخطى الحجب** إذا كان يمرّر الترافيك فعلاً. أداة الفحص: `deploy/check-net.js`.
 - الحجم: `node_modules` = ٦٩ MB · الباقي = ٢ MB · `cloudflared` ≈ ٤٠–٥٣ MB → القرص (١ GB) ليس عقبة.
