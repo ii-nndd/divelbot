@@ -504,13 +504,19 @@ const nz = (t) => t.replace(/[\u064B-\u0652\u0640]/g, '').replace(/[أإآ]/g, '
 
 // يحوّل رسالة عادية لشكل شبيه بالسلاش عشان نستخدم نفس كود الألعاب والنقاط
 const asInteraction = (message, name) => {
+    // الرد على الرسالة يفشل لو انحذفت (مثل أمر «يا عبد مسح 20» اللي يمسح نفسه)
+    // → نرجع نرسل بالروم عادي عشان التأكيد يوصل دايماً بدل ما يطلع خطأ.
+    const send = (o) => {
+        const payload = typeof o === 'string' ? o : { ...o, flags: undefined };
+        return message.reply(payload).catch(() => message.channel.send(payload).catch(() => {}));
+    };
     const it = {
         commandName: name, client, channel: message.channel, guild: message.guild,
         user: message.author, member: message.member, replied: false, deferred: false,
         options: { getUser: () => null, getInteger: () => null, getString: () => null },
-        reply: (o) => { it.replied = true; return message.reply(typeof o === 'string' ? o : { ...o, flags: undefined }); },
+        reply: (o) => { it.replied = true; return send(o); },
         deferReply: async () => { it.deferred = true; },
-        editReply: (o) => message.reply(typeof o === 'string' ? o : { ...o, flags: undefined })
+        editReply: (o) => send(o)
     };
     return it;
 };

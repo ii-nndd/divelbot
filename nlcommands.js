@@ -95,14 +95,20 @@ async function handle(message, tier, ctx, admin) {
         return true;
     }
 
+    // الرد على الرسالة يفشل لو انحذفت (أمر «مسح» يمسح الرسالة نفسها)
+    // → نرجع نرسل بالروم عادي عشان التأكيد يوصل دايماً بدون خطأ.
+    const send = (o) => {
+        const payload = typeof o === 'string' ? o : (o && o.content != null ? o.content : '');
+        return message.reply(payload).catch(() => message.channel.send(payload).catch(() => {}));
+    };
     const i = {
         commandName: found.name,
         guild: message.guild, channel: message.channel, user: message.author,
         member: message.member, client: message.client,
         deferred: false, replied: false,
-        reply: async (o) => { i.replied = true; return message.reply(typeof o === 'string' ? o : o.content); },
+        reply: async (o) => { i.replied = true; return send(o); },
         deferReply: async () => { i.deferred = true; },
-        editReply: async (o) => message.reply(typeof o === 'string' ? o : o.content),
+        editReply: async (o) => send(o),
         options: {
             getMember: (name) => (name === 'عضو' ? target : null),
             getUser: (name) => (name === 'عضو' ? (target ? target.user : null) : null),
@@ -131,7 +137,7 @@ async function handle(message, tier, ctx, admin) {
         await admin.run(i, tier, ctx);
     } catch (err) {
         console.error('❌ خطأ أمر نصي:', found.name, err.message);
-        if (!i.replied) await message.reply('⚠️ ما قدرت أنفذ. تأكد إن رتبتي أعلى من العضو/الرتبة وإني عندي الصلاحية.').catch(() => {});
+        if (!i.replied) await send('⚠️ ما قدرت أنفذ. تأكد إن رتبتي أعلى من العضو/الرتبة وإني عندي الصلاحية.');
     }
     return true;
 }
