@@ -117,6 +117,7 @@
 
 | Commit | المحتوى |
 |---|---|
+| `c40bb2b` | ⭐ **تصحيح تشخيص الحجب + أداة فحص:** السبب **مزوّد الخدمة `OmanTel`** (تسميم DNS + **قطع SNI/DPI** + حجب DoH) **مو NetShield**، و**ProtonVPN هو الحل** بشرط أن يمرّر الترافيك فعلاً + `deploy/check-net.js` (تحديث `AGENTS.md`/`HANDOFF.md`/`HOSTING.md` + قسم جديد لاستكشاف أخطاء الحجب) |
 | `3c4ffad` | ⭐ **رابط ثابت للأبد** (`tsfunnel.js`) + ترقية `BUILD` إلى `2026-10-17.2` + `/health` يعرض الرابط العام |
 | `ae538b1` | `colors.js`: إنشاء الرتبة بـ`colors: { primaryColor }` (شال تحذير `discord.js`) |
 | `ff3619c` | تحصين اللوحة ضد `Unexpected token '<'`: `api()` تقرأ نص→JSON + إعادة محاولة + رسالة عربية · هاندلر 404 JSON لكل `api/*` · هاندلر أخطاء JSON · `no-store` على `/dashboard` · `GET /dashboard/api/ping` + زر «🔍 فحص الاتصال» + `BUILD` · `tunnel.js` يتحقق من تسجيل الـredirect ويرسل الخطوة اليدوية |
