@@ -43,6 +43,16 @@ function set(gid, b) {
 
 const rand = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 
+// طباعة الخطأ مرة كل ٥ دقايق لكل نوع — لأن الأخطاء هني كانت تنبلع بصمت
+// (صار فعلاً إن خبرة الكتابي والصوتي كانت تفشل ٤ أشهر بلا أي أثر بالكونسول)
+const lastErr = new Map();
+function logErr(what, err) {
+    const now = Date.now();
+    if (now - (lastErr.get(what) || 0) < 300_000) return;
+    lastErr.set(what, now);
+    console.error(`❌ ${what}:`, err && err.message ? err.message : err);
+}
+
 // ===== خبرة التفاعل الكتابي =====
 const chatCd = new Map();
 async function onMessage(message) {
@@ -56,7 +66,7 @@ async function onMessage(message) {
     chatCd.set(key, now);
 
     const gain = rand(cfg.textMin, cfg.textMax);
-    const doc = await points.addText(message.guild.id, message.author.id, gain).catch(() => null);
+    const doc = await points.addText(message.guild.id, message.author.id, gain).catch((e) => { logErr('حفظ خبرة الكتابي', e); return null; });
     if (!doc) return;
     const before = points.levelOf(doc.points - gain), after = points.levelOf(doc.points);
     if (after > before && cfg.announce) {
@@ -99,7 +109,7 @@ async function voiceTick() {
                 if (members.length < cfg.voiceMinMembers) continue;
                 for (const m of members) {
                     const gain = rand(cfg.voiceMin, cfg.voiceMax);
-                    await points.addVoice(g.id, m.id, gain).catch(() => {});
+                    await points.addVoice(g.id, m.id, gain).catch((e) => { logErr('حفظ خبرة الصوتي', e); });
                 }
             }
         }

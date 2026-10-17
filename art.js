@@ -972,8 +972,8 @@ async function giveawayCard({ prize, winners = 1, endsAt, by, entrants = 0 }) {
     // شرائح المعلومات
     const stats = [
         { label: 'عدد الفائزين', value: winners },
-        { label: 'متسابق حتى الآن', value: entrants },
-        { label: 'ينتهي', value: String(Math.max(0, Math.round((endsAt - Date.now()) / 60000))) }
+        { label: 'المتسابقون الآن', value: entrants },
+        { label: 'المتبقي بالدقائق', value: String(Math.max(0, Math.round((endsAt - Date.now()) / 60000))) }
     ];
     const sy = 352, sh = 84, gap = 16;
     const sw = (W - PAD * 2 - gap * 2) / 3;

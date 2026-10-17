@@ -34,7 +34,10 @@ async function bump(guildId, userId, inc) {
     if (!users) return null;
     const doc = await users.findOneAndUpdate(
         { guildId, userId },
-        { $inc: inc, $setOnInsert: { createdAt: new Date(), textXp: 0, voiceXp: 0 } },
+        // مهم: ممنوع نحط textXp/voiceXp بـ$setOnInsert مع $inc على نفس الحقل
+        // (مونقو يرفض: Updating the path 'textXp' would create a conflict at 'textXp')
+        // و$inc ينشئ الحقل من نفسه لو مو موجود، فـcreatedAt يكفي هنا.
+        { $inc: inc, $setOnInsert: { createdAt: new Date() } },
         { upsert: true, returnDocument: 'after' }
     );
     if (doc && doc.points < 0) {
