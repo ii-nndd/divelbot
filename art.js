@@ -23,10 +23,15 @@ catch { console.error('⚠️ @napi-rs/canvas غير مثبت، صور نوفا 
 
 const FONT_PATH = path.join(__dirname, 'Layla-Thuluth.ttf');
 const FAMILY = 'Nova';
-let fontOk = false;
+// سلسلة احتياطية: خط ليلى ما فيه إيموجي ولا الحروف المزخرفة (𝕹𝖔𝖛𝖆 / ＮＯＶＡ) ولا بعض
+// اللاتيني (ö)، فنخلي سكيا يجرّب خطوط النظام بعدها بدل ما يطلع مربع فاضي □.
+const FONT_STACK = FAMILY + ', DejaVu Sans, Arial, Segoe UI, Noto Sans, Tahoma, sans-serif';
+let fontOk = false, sysFonts = 0;
 if (canvasLib) {
     try { canvasLib.GlobalFonts.registerFromPath(FONT_PATH, FAMILY); fontOk = true; }
     catch (e) { console.error('❌ فشل تحميل خط نوفا (تأكد إن Layla-Thuluth.ttf بجذر المشروع):', e.message); }
+    // خطوط النظام (DejaVu/Arial...) عشان الحروف اللي مو بخط ليلى تنرسم بدل المربع
+    try { sysFonts = canvasLib.GlobalFonts.loadSystemFonts(); } catch { /* بيئات بلا خطوط نظام */ }
 }
 const available = () => !!canvasLib && fontOk;
 
@@ -44,18 +49,85 @@ const isAr = (s) => /[\u0600-\u06FF]/.test(String(s || ''));
 const autoDir = (s) => (isAr(s) ? 'rtl' : 'ltr');
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
-// تنظيف النص قبل الرسم: الإيموجي يطلع مربع فارغ (خط ليلى ما فيه إيموجي)،
-// وبعض الرموز المزخرفة (— • … ×) مو موجودة بالخط فنبدّلها بمقابلها الآمن.
+// ===== تنظيف النص قبل الرسم =====
+// المشكلة: خط ليلى (ثلث) ما فيه إيموجي ولا الحروف "المزخرفة" اللي يستخدمونها بأسماء
+// السيرفرات/الأعضاء (𝕹𝖔𝖛𝖆 · ＮＯＶＡ · ⓃⓄⓋⒶ · 🅰) ولا بعض اللاتيني — فيطلع مربع فاضي □.
+// الحل على ٣ طبقات:  (١) نطبّع المزخرف لحروف عادية  (٢) نشيل الإيموجي  (٣) قائمة سماح صارمة.
+const FANCY_MAP = (() => {
+    const m = new Map();
+    // Mathematical Alphanumeric Symbols: عريض/مائل/مخطوط/fraktur/double-struck/sans/mono
+    const bases = [0x1D400, 0x1D434, 0x1D468, 0x1D49C, 0x1D4D0, 0x1D504, 0x1D538,
+        0x1D56C, 0x1D5A0, 0x1D5D4, 0x1D608, 0x1D63C, 0x1D670];
+    for (let i = 0; i < 26; i++) {
+        for (const b of bases) {
+            m.set(b + i, String.fromCharCode(65 + i));
+            m.set(b + 26 + i, String.fromCharCode(97 + i));
+        }
+    }
+    for (let i = 0; i < 10; i++)
+        for (const b of [0x1D7CE, 0x1D7D8, 0x1D7E2, 0x1D7EC, 0x1D7F6]) m.set(b + i, String(i));
+    // العرض الكامل (ＮＯＶＡ ｎｏｖａ １２３ ！)
+    for (let c = 0xFF01; c <= 0xFF5E; c++) m.set(c, String.fromCharCode(c - 0xFEE0));
+    // الدوائر والمربعات (Ⓐ ⓐ ① 🅐 🅰 🄐 🄰 ⑴)
+    for (let i = 0; i < 26; i++) {
+        m.set(0x24B6 + i, String.fromCharCode(65 + i));   // Ⓐ
+        m.set(0x24D0 + i, String.fromCharCode(97 + i));   // ⓐ
+        for (const b of [0x1F110, 0x1F130, 0x1F150, 0x1F170]) m.set(b + i, String.fromCharCode(65 + i));
+    }
+    for (let i = 0; i < 10; i++) { m.set(0x2460 + i, String(i + 1)); m.set(0x2474 + i, String(i + 1)); m.set(0x2488 + i, String(i + 1)); }
+    m.set(0x00B2, '2'); m.set(0x00B3, '3'); m.set(0x00B9, '1');   // ²³¹
+    for (let i = 0; i < 10; i++) { m.set(0x2070 + i, String(i)); m.set(0x2080 + i, String(i)); }
+    // حروف شبيهة (سيريلي/يوناني) شائعة بأسماء الديسكورد — نحوّلها لاتيني بدل ما تصير فراغ
+    const homo = {
+        'а': 'a', 'е': 'e', 'о': 'o', 'р': 'p', 'с': 'c', 'х': 'x', 'у': 'y', 'і': 'i', 'ј': 'j', 'ѕ': 's',
+        'А': 'A', 'В': 'B', 'Е': 'E', 'З': '3', 'К': 'K', 'М': 'M', 'Н': 'H', 'О': 'O', 'Р': 'P', 'С': 'C',
+        'Т': 'T', 'У': 'Y', 'Х': 'X', 'І': 'I', 'Ѕ': 'S', 'Њ': 'H', 'ԁ': 'd', 'ɡ': 'g',
+        'α': 'a', 'β': 'b', 'ε': 'e', 'ο': 'o', 'ρ': 'p', 'τ': 't', 'ν': 'v', 'κ': 'k', 'μ': 'u',
+        'Α': 'A', 'Β': 'B', 'Ε': 'E', 'Ζ': 'Z', 'Η': 'H', 'Ι': 'I', 'Κ': 'K', 'Μ': 'M', 'Ν': 'N',
+        'Ο': 'O', 'Ρ': 'P', 'Τ': 'T', 'Υ': 'Y', 'Χ': 'X', '₩': 'W', '₪': 'N'
+    };
+    for (const [k, v] of Object.entries(homo)) m.set(k.codePointAt(0), v);
+    return m;
+})();
+
+function deFancy(s) {
+    let out = '';
+    for (const ch of s) {
+        const cp = ch.codePointAt(0);
+        out += FANCY_MAP.has(cp) ? FANCY_MAP.get(cp) : ch;
+    }
+    return out;
+}
+
+// قائمة سماح صارمة: عربي + لاتيني + أرقام + ترقيم آمن. أي محرف ثاني يُشال نهائياً
+// (أفضل من مربع فاضي □ داخل الصورة).
+const KEEP_RE = /[^0-9A-Za-z\u00C0-\u024F\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF \t.,:;!?()\[\]{}<>'"+\-*\/\\%&@#_=|~^$\u06D4]/g;
+
+// الإيموجي والرموز (شكل ولون/أسهم/رموز فنية)
 const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2190}-\u{21FF}\u{2300}-\u{23FF}\u{2460}-\u{24FF}\u{25A0}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}]/gu;
+// محارف خفية/تحكم (ZWJ · LRM · RLM · علامات الاتجاه) — تطلع مربع فاضي أو تخرب الترتيب
+const INVISIBLE_RE = /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF\u00AD\u034F\u180E\u3164\uFFA0]/g;
+
 function san(s) {
-    return String(s == null ? '' : s)
-        .replace(EMOJI_RE, '')
-        .replace(/[\u2013\u2014\u2015]/g, '-')
+    let t = String(s == null ? '' : s);
+    t = deFancy(t);                                  // ١) 𝕹𝖔𝖛𝖆 → Nova
+    t = t.replace(INVISIBLE_RE, '');                 // ٢) المحارف الخفية
+    t = t.replace(EMOJI_RE, '');                     // ٣) الإيموجي
+    t = t.replace(/[\u2013\u2014\u2015]/g, '-')      // ٤) رموز مزخرفة → بديل آمن
         .replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"')
         .replace(/\u2026/g, '...').replace(/\u00D7/g, 'x').replace(/\u00F7/g, '/')
-        .replace(/\u2022|\u00B7|\u25CF/g, '-').replace(/\u00A0/g, ' ')
-        .replace(/[ \t]{2,}/g, ' ').trim();
+        .replace(/[\u2022\u00B7\u25CF]/g, '-').replace(/\u00A0/g, ' ');
+    t = t.replace(KEEP_RE, '');                      // ٥) قائمة السماح (لا مربعات)
+    return t.replace(/[ \t]{2,}/g, ' ').trim();
 }
+
+// اسم نظيف مع بديل لو صار فراغ بعد التنظيف (اسم كله إيموجي مثلاً)، ومقصوص لو طويل
+// عشان الأسماء الطويلة ما تزحف فوق الصورة الشخصية أو تطلع من الإطار.
+const clip = (s, n) => {
+    const t = san(s);
+    return t.length > n ? t.slice(0, Math.max(0, n - 3)).trimEnd() + '...' : t;
+};
+const nm = (s, fallback, n) => clip(san(s) || fallback, n || 1000);
 
 // ===== أدوات رسم أساسية =====
 function roundRect(ctx, x, y, w, h, r) {
@@ -73,7 +145,7 @@ function roundRect(ctx, x, y, w, h, r) {
 function T(ctx, s, x, y, o = {}) {
     const str = san(s);
     const size = o.size || 32;
-    ctx.font = (o.weight || '500') + ' ' + size + 'px ' + FAMILY;
+    ctx.font = (o.weight || '500') + ' ' + size + 'px ' + FONT_STACK;
     ctx.fillStyle = o.color || C.txt;
     ctx.textAlign = o.align || (isAr(str) ? 'right' : 'left');
     ctx.textBaseline = o.base || 'alphabetic';
@@ -89,7 +161,7 @@ function T(ctx, s, x, y, o = {}) {
 // نص بتدرّج ذهبي + توهّج (للعناوين الكبيرة)
 function goldText(ctx, s, x, y, size, align, o = {}) {
     const str = san(s);
-    ctx.font = '600 ' + size + 'px ' + FAMILY;
+    ctx.font = '600 ' + size + 'px ' + FONT_STACK;
     ctx.textAlign = align || 'right';
     ctx.direction = o.dir || autoDir(str);
     ctx.textBaseline = 'alphabetic';
@@ -261,16 +333,19 @@ async function brand(ctx, w, { server, pad = 48, y = 74 } = {}) {
     await drawLogo(ctx, pad + 24, y - 12, 48, 1);
     let x = pad + 58;
     const letters = 'NOVA';
-    ctx.font = '600 28px ' + FAMILY;
+    ctx.font = '600 28px ' + FONT_STACK;
     ctx.textAlign = 'left'; ctx.direction = 'ltr';
     ctx.fillStyle = C.gold;
     for (const ch of letters) { ctx.fillText(ch, x, y); x += ctx.measureText(ch).width + 5; }
-    if (server) {
-        ctx.font = '500 26px ' + FAMILY;
-        const tw = ctx.measureText(server).width;
-        const pw = tw + 44, px = w - pad - pw, py = y - 32;
+    // اسم السيرفر داخل كبسولة — نقيس النص بعد التنظيف (لا مربعات، ولا يزحف على الشعار)
+    const srv0 = san(server);
+    if (srv0) {
+        const srv = srv0.length > 28 ? srv0.slice(0, 28) + '...' : srv0;
+        ctx.font = '500 26px ' + FONT_STACK;
+        const tw = ctx.measureText(srv).width;
+        const pw = Math.min(tw + 44, w * 0.52), px = w - pad - pw, py = y - 32;
         glass(ctx, px, py, pw, 50, 25, 'rgba(255,255,255,.05)', 'rgba(255,200,90,.22)');
-        T(ctx, server, px + pw - 22, y + 1, { size: 26, color: '#e9e4f2', align: 'right' });
+        T(ctx, srv, px + pw - 22, y + 1, { size: 26, color: '#e9e4f2', align: 'right' });
     }
 }
 
@@ -397,6 +472,24 @@ function icon(ctx, name, cx, cy, size, color) {
             ctx.fillRect(-s * 0.09, -s * 0.45, s * 0.18, s * 0.72);
             ctx.beginPath(); ctx.arc(0, s * 0.5, s * 0.13, 0, Math.PI * 2); ctx.fill(); break;
         }
+        case 'horn': {   // مكبّر صوت — للإعلانات
+            // البوق
+            ctx.beginPath();
+            ctx.moveTo(-s * 0.92, -s * 0.34);
+            ctx.lineTo(s * 0.34, -s * 0.95);
+            ctx.lineTo(s * 0.34, s * 0.6);
+            ctx.lineTo(-s * 0.92, s * 0.2);
+            ctx.closePath(); ctx.fill();
+            // المقبض
+            ctx.beginPath();
+            ctx.moveTo(-s * 0.68, s * 0.16); ctx.lineTo(-s * 0.46, s * 1.05);
+            ctx.lineTo(-s * 0.06, s * 0.95); ctx.lineTo(-s * 0.28, s * 0.24);
+            ctx.closePath(); ctx.fill();
+            // الموجات
+            ctx.beginPath(); ctx.arc(s * 0.54, -s * 0.18, s * 0.42, -0.95, 0.75); ctx.stroke();
+            ctx.beginPath(); ctx.arc(s * 0.54, -s * 0.18, s * 0.78, -0.85, 0.65); ctx.stroke();
+            break;
+        }
         case 'check': {
             ctx.beginPath(); ctx.moveTo(-s * 0.8, s * 0.05); ctx.lineTo(-s * 0.2, s * 0.62);
             ctx.lineTo(s * 0.85, -s * 0.62); ctx.stroke(); break;
@@ -455,6 +548,7 @@ function icon(ctx, name, cx, cy, size, color) {
 
 // ===== الصور (مع كاش عشان ما ننزّل نفس الصورة كل مرة) =====
 const imgCache = new Map();
+const LOAD_MS = 6000;   // مهلة قصوى للصورة الوحدة (شامل قراءة البيانات)
 async function loadImg(url) {
     if (!url) return null;
     const hit = imgCache.get(url);
@@ -462,20 +556,35 @@ async function loadImg(url) {
         if (hit.img) return hit.img;
         if (Date.now() - hit.at < 300_000) return null;   // فشل قريب: ننتظر ٥ دقايق
     }
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), LOAD_MS);
     try {
-        const ac = new AbortController();
-        const t = setTimeout(() => ac.abort(), 7000);
         const res = await fetch(url, { signal: ac.signal });
-        clearTimeout(t);
         if (!res.ok) throw new Error('HTTP ' + res.status);
-        const img = await canvasLib.loadImage(Buffer.from(await res.arrayBuffer()));
+        // مهم: المهلة تغطي قراءة البيانات بعد الهيدرز كمان (كانت تتوقف قبله = تعليق)
+        const buf = Buffer.from(await res.arrayBuffer());
+        const img = await canvasLib.loadImage(buf);
         if (imgCache.size > 400) imgCache.clear();
         imgCache.set(url, { img, at: Date.now() });
         return img;
     } catch {
         imgCache.set(url, { img: null, at: Date.now() });
         return null;
-    }
+    } finally { clearTimeout(t); }
+}
+
+// غلاف أمان: لو الرسم أو تنزيل الصور تعطّل، يرجع null بدل ما يعلّق الأمر
+async function guard(promise, ms = 8000, what = 'صورة') {
+    let t;
+    try {
+        return await Promise.race([
+            Promise.resolve(promise),
+            new Promise((_, rej) => { t = setTimeout(() => rej(new Error('تجاوز المهلة ' + ms + 'ms')), ms); })
+        ]);
+    } catch (e) {
+        console.error('⚠️ تعذّر رسم ' + what + ':', e.message);
+        return null;
+    } finally { clearTimeout(t); }
 }
 
 // علم الدولة من الإيموجي (🇦🇪 → ae) عبر flagcdn مع بديل jsDelivr
@@ -560,9 +669,10 @@ async function welcomeCard({ avatarURL, name, tag, server, count, subtitle, memb
 
     // الاسم + الوصف
     const RX = W - PAD;
-    T(ctx, name || 'عضو جديد', RX, 316, { size: 52, weight: '600', color: '#ffffff', align: 'right' });
-    if (tag) T(ctx, tag, RX, 358, { size: 28, color: C.mut, align: 'right' });
-    T(ctx, subtitle || ('نوّرت ' + (server || 'السيرفر')), RX, 404, { size: 30, color: C.gold, align: 'right' });
+    T(ctx, nm(name, 'عضو جديد', 26), RX, 316, { size: 52, weight: '600', color: '#ffffff', align: 'right' });
+    const tg = clip(tag, 26);
+    if (tg) T(ctx, tg, RX, 358, { size: 28, color: C.mut, align: 'right' });
+    T(ctx, clip(subtitle, 64) || ('نوّرت ' + (clip(server, 28) || 'السيرفر')), RX, 404, { size: 30, color: C.gold, align: 'right' });
 
     // شريط سفلي: العضو رقم + الأعضاء + التاريخ
     const sy = 442, sh = 58, sx = PAD, sw = W - PAD * 2;
@@ -637,7 +747,7 @@ async function gameCard({ kind = 'text', game, main, hint, seconds = 30, flag, i
         ctx.textAlign = 'center'; ctx.direction = 'rtl';
         const len = String(main).length;
         const size = len > 46 ? 38 : len > 30 ? 48 : 60;
-        ctx.font = '600 ' + size + 'px ' + FAMILY;
+        ctx.font = '600 ' + size + 'px ' + FONT_STACK;
         wrapCentered(ctx, main, W / 2, py + ph / 2, pw - 110, size * 1.35);
     }
 
@@ -669,16 +779,16 @@ async function winCard({ avatarURL, name, game, seconds, points, total, leveledU
     const AR = 96, AX = PAD + AR, AY = 312;
     await drawAvatar(ctx, avatarURL, AX, AY, AR);
 
-    T(ctx, name || 'عضو', RX, 244, { size: 52, weight: '600', color: '#ffffff', align: 'right' });
-    T(ctx, game || '', RX, 290, { size: 30, color: C.gold, align: 'right' });
+    T(ctx, nm(name, 'عضو', 26), RX, 244, { size: 52, weight: '600', color: '#ffffff', align: 'right' });
+    T(ctx, clip(game, 30), RX, 290, { size: 30, color: C.gold, align: 'right' });
     numLabel(ctx, RX, 344, 'خلال ثانية', Number(seconds || 0).toFixed(1), { size: 30, numSize: 34, color: C.mut, numColor: C.txt });
 
     // شرائح النقاط
     let cx = RX;
     const chip = (label, value, c0, c1) => {
-        ctx.font = '600 30px ' + FAMILY;
+        ctx.font = '600 30px ' + FONT_STACK;
         const vw = ctx.measureText(nf(value)).width;
-        ctx.font = '500 28px ' + FAMILY;
+        ctx.font = '500 28px ' + FONT_STACK;
         const lw = ctx.measureText(label).width;
         const w = vw + lw + 74;
         const y = 372, h = 54, x = cx - w;
@@ -727,7 +837,7 @@ async function dailyCard({ avatarURL, name, amount, balance, cdHours }) {
 
     const AR = 92, AX = PAD + AR, AY = 318;
     await drawAvatar(ctx, avatarURL, AX, AY, AR);
-    T(ctx, name || 'عضو', RX, 288, { size: 46, weight: '600', color: '#fff', align: 'right' });
+    T(ctx, nm(name, 'عضو', 26), RX, 288, { size: 46, weight: '600', color: '#fff', align: 'right' });
     numLabel(ctx, RX, 338, 'الراتب القادم بعد', cdHours, { size: 26, suffix: 'ساعة' });
 
     // المبلغ الكبير
@@ -752,7 +862,7 @@ async function levelUpCard({ avatarURL, name, level, points, lo, hi, rank }) {
     const RX = W - PAD;
     const AR = 90, AX = PAD + AR, AY = 300;
     await drawAvatar(ctx, avatarURL, AX, AY, AR);
-    T(ctx, name || 'عضو', RX, 270, { size: 46, weight: '600', color: '#fff', align: 'right' });
+    T(ctx, nm(name, 'عضو', 26), RX, 270, { size: 46, weight: '600', color: '#fff', align: 'right' });
 
     // شارة المستوى (دائرة ذهبية وسط الفراغ)
     const bx = 540, by = 294, bR = 72;
@@ -790,9 +900,11 @@ async function noticeCard({ title, iconName = 'sparkle', lines = [], avatarURL, 
     const W = 1024, PAD = 52, LH = 46, FS = 34;
     // نقيس الأسطر الحقيقية قبل ما نحدد ارتفاع الصورة
     const mctx = canvasLib.createCanvas(10, 10).getContext('2d');
-    mctx.font = '500 ' + FS + 'px ' + FAMILY;
+    mctx.font = '500 ' + FS + 'px ' + FONT_STACK;
+    // لو فيه صورة شخصية نقلّل عرض الأسطر عشان أطول سطر ما يزحف فوقها
+    const bodyW = W - PAD * 2 - 24 - (avatarURL ? 180 : 0);
     const wrapped = [];
-    for (const l of lines) for (const one of wrapLines(mctx, l, W - PAD * 2 - 24)) wrapped.push(one);
+    for (const l of lines) for (const one of wrapLines(mctx, l, bodyW)) wrapped.push(one);
 
     const top = 200 + (avatarURL ? 132 : 0);
     const statsH = stats.length ? 108 : 0;
@@ -809,13 +921,14 @@ async function noticeCard({ title, iconName = 'sparkle', lines = [], avatarURL, 
     if (avatarURL) {
         const AR = 78;
         await drawAvatar(ctx, avatarURL, PAD + AR, top - 62, AR);
-        T(ctx, name || 'عضو', W - PAD, top - 74, { size: 44, weight: '600', color: '#fff', align: 'right' });
-        if (sub) T(ctx, sub, W - PAD, top - 32, { size: 28, color: C.mut, align: 'right' });
+        T(ctx, nm(name, 'عضو', 34), W - PAD, top - 74, { size: 44, weight: '600', color: '#fff', align: 'right' });
+        const sb = clip(sub, 42);
+        if (sb) T(ctx, sb, W - PAD, top - 32, { size: 28, color: C.mut, align: 'right' });
     }
 
     ctx.textAlign = 'right'; ctx.direction = 'rtl';
     ctx.fillStyle = tone === 'bad' ? '#ffd9d9' : '#e8e3f2';
-    ctx.font = '500 ' + FS + 'px ' + FAMILY;
+    ctx.font = '500 ' + FS + 'px ' + FONT_STACK;
     wrapped.forEach((l, i) => ctx.fillText(l, W - PAD, top + 30 + i * LH));
 
     if (stats.length) {
@@ -848,7 +961,7 @@ async function giveawayCard({ prize, winners = 1, endsAt, by, entrants = 0 }) {
     ctx.textAlign = 'center'; ctx.direction = 'rtl';
     const len = String(prize || '').length;
     const size = len > 40 ? 40 : len > 24 ? 52 : 66;
-    ctx.font = '600 ' + size + 'px ' + FAMILY;
+    ctx.font = '600 ' + size + 'px ' + FONT_STACK;
     ctx.fillStyle = '#fff';
     wrapCentered(ctx, prize || 'جائزة', W / 2, 260, W - PAD * 2 - 60, size * 1.3);
     const line = ctx.createLinearGradient(W / 2 - 200, 0, W / 2 + 200, 0);
@@ -871,13 +984,22 @@ async function giveawayCard({ prize, winners = 1, endsAt, by, entrants = 0 }) {
         T(ctx, s.label, x + sw / 2, sy + 70, { size: 23, color: C.mut, align: 'center' });
         x -= sw + gap;
     }
-    if (by) T(ctx, 'بدأها ' + by, W / 2, sy - 16, { size: 24, color: C.dim, align: 'center' });
+    // «بدأها <اسم>» — نرسم العربي والاسم منفصلين (خط ليلى ما يمزج العربي مع اللاتيني صح)
+    const byn = clip(by, 22);
+    if (byn) {
+        const lab = 'بدأها';
+        ctx.font = '500 24px ' + FONT_STACK;
+        const w1 = ctx.measureText(lab).width, w2 = ctx.measureText(byn).width;
+        const left = W / 2 - (w1 + w2 + 12) / 2;
+        T(ctx, lab, left + w2 + 12 + w1, sy - 16, { size: 24, color: C.dim, align: 'right' });
+        T(ctx, byn, left + w2, sy - 16, { size: 24, color: C.gold, align: 'right' });
+    }
     footer(ctx, W, H, 'اضغط زر الدخول بالأسفل للمشاركة');
     return cv.toBuffer('image/png');
 }
 
 module.exports = {
-    available, FONT_PATH, FAMILY, C, san, nf,
+    available, FONT_PATH, FAMILY, FONT_STACK, C, san, nm, nf, guard, sysFonts,
     welcomeCard, leaveCard, gameCard, winCard, dailyCard, levelUpCard, noticeCard, giveawayCard,
     flagImage, flagCode, loadImg
 };

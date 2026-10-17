@@ -3,6 +3,7 @@
 const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder, MessageFlags } = require('discord.js');
 const { MongoClient } = require('mongodb');
 const cards = require('./cards');
+const art = require('./art');
 
 let users = null;
 const chatCd = new Map();
@@ -101,17 +102,18 @@ async function profile(guildId, userId) {
 // يرسل بطاقة الرتبة (صورة احترافية) مع بديل نصي لو الرسم معطل
 async function sendRank(target, user, guildId) {
     const p = await profile(guildId, user.id);
+    // الرد الوهمي (أوامر الكلام) يدعم deferReply كذلك — والرسالة العادية ترجع reply مباشرة
+    const send = (o) => (target.deferred && typeof target.editReply === 'function') ? target.editReply(o) : target.reply(o);
     if (cards.available()) {
-        try {
-            const png = await cards.rankCard({
-                avatarURL: user.displayAvatarURL({ extension: 'png', size: 256 }),
-                username: user.username, displayName: user.globalName || user.username,
-                totalXp: p.points, totalLevel: p.totalLevel, lo: p.lo, hi: p.hi,
-                textXp: p.textXp, textLevel: p.textLevel,
-                voiceXp: p.voiceXp, voiceLevel: p.voiceLevel, rank: p.rank
-            });
-            return target.reply({ files: [new AttachmentBuilder(png, { name: 'rank.png' })] });
-        } catch (err) { console.error('❌ فشل رسم بطاقة الرتبة:', err.message); }
+        if (typeof target.deferReply === 'function') await target.deferReply().catch(() => {});
+        const png = await art.guard(cards.rankCard({
+            avatarURL: user.displayAvatarURL({ extension: 'png', size: 256 }),
+            username: user.username, displayName: user.globalName || user.username,
+            totalXp: p.points, totalLevel: p.totalLevel, lo: p.lo, hi: p.hi,
+            textXp: p.textXp, textLevel: p.textLevel,
+            voiceXp: p.voiceXp, voiceLevel: p.voiceLevel, rank: p.rank
+        }), 7000, 'بطاقة الرتبة');
+        if (png) return send({ files: [new AttachmentBuilder(png, { name: 'rank.png' })] }).catch(() => {});
     }
     const filled = Math.round(((p.points - p.lo) / Math.max(1, p.hi - p.lo)) * 10);
     const e = new EmbedBuilder().setColor(0xb3121e).setTitle(user.username)
@@ -123,7 +125,7 @@ async function sendRank(target, user, guildId) {
             { name: 'الترتيب', value: `#${p.rank}`, inline: true }
         )
         .setDescription(`${'█'.repeat(filled)}${'░'.repeat(10 - filled)}  ${p.points}/${p.hi} XP`);
-    return target.reply({ embeds: [e] });
+    return send({ embeds: [e] });
 }
 
 const commands = [
@@ -164,8 +166,8 @@ async function handle(i, ctx) {
                             totalLevel: levelOf(d.points || 0)
                         });
                     }
-                    const png = await cards.leaderboardCard(entries);
-                    return i.editReply({ files: [new AttachmentBuilder(png, { name: 'leaderboard.png' })] });
+                    const png = await art.guard(cards.leaderboardCard(entries), 9000, 'بطاقة المتصدرين');
+                    if (png) return i.editReply({ files: [new AttachmentBuilder(png, { name: 'leaderboard.png' })] });
                 } catch (err) { console.error('❌ فشل رسم بطاقة المتصدرين:', err.message); }
             }
             const medals = ['🥇', '🥈', '🥉'];

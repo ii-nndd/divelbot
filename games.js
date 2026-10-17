@@ -82,31 +82,31 @@ async function play(i, ctx, g) {
     try {
         let promptSent = false;
 
+        // نأجّل الرد أول: الرسم + تنزيل صورة العلم ممكن ياخذوا ثانيتين، ومهلة ديسكورد ٣ ثواني
+        // → بدون التأجيل تطلع «did not respond». (الرد الوهمي بالكلام يدعمها كمان.)
+        if (typeof i.deferReply === 'function') await i.deferReply().catch(() => {});
+        const send = (o) => (i.editReply ? i.editReply(o).catch(() => {}) : i.reply(o));
+
         // ١) بطاقة نوفا الجديدة (نفس الهوية لكل الألعاب الأربعة — والعلم يجيب صورته الحقيقية)
         if (g.cardMain && art.available()) {
-            try {
-                const flag = g.flagEmoji ? await art.flagImage(g.flagEmoji) : null;
-                if (!g.flagEmoji || flag) {
-                    const png = await art.gameCard({
-                        kind: g.kind || 'text', game: g.game || g.title, main: g.cardMain,
-                        hint: g.cardSmall, seconds: g.seconds, flag, iconName: g.iconName
-                    });
-                    await i.reply({ files: [new AttachmentBuilder(png, { name: 'game.png' })] });
-                    promptSent = true;
-                }
-            } catch (err) { console.error('❌ فشل رسم بطاقة السؤال:', err.message); }
+            let flag = null;
+            if (g.flagEmoji) flag = await art.guard(art.flagImage(g.flagEmoji), 5000, 'علم اللعبة');
+            if (!g.flagEmoji || flag) {
+                const png = await art.guard(art.gameCard({
+                    kind: g.kind || 'text', game: g.game || g.title, main: g.cardMain,
+                    hint: g.cardSmall, seconds: g.seconds, flag, iconName: g.iconName
+                }), 6000, 'بطاقة السؤال');
+                if (png) { await send({ files: [new AttachmentBuilder(png, { name: 'game.png' })] }); promptSent = true; }
+            }
         }
 
         // ٢) رجوع للبطاقة القديمة (بدون الأعلام — الإيموجي يطلع مربع بالبطاقة القديمة)، ٣) رجوع للـEmbed النصي
         if (!promptSent && g.cardMain && !g.flagEmoji && cards.available()) {
-            try {
-                const png = await cards.gamePromptCard({ title: g.title, mainText: g.cardMain, small: g.cardSmall, seconds: g.seconds });
-                await i.reply({ files: [new AttachmentBuilder(png, { name: 'game.png' })] });
-                promptSent = true;
-            } catch (err) { console.error('❌ فشل رسم بطاقة السؤال:', err.message); }
+            const png = await art.guard(cards.gamePromptCard({ title: g.title, mainText: g.cardMain, small: g.cardSmall, seconds: g.seconds }), 6000, 'بطاقة السؤال القديمة');
+            if (png) { await send({ files: [new AttachmentBuilder(png, { name: 'game.png' })] }); promptSent = true; }
         }
         if (!promptSent) {
-            await i.reply({ embeds: [new EmbedBuilder().setColor(0xb3121e).setTitle(g.title)
+            await send({ embeds: [new EmbedBuilder().setColor(0xb3121e).setTitle(g.title)
                 .setDescription(g.body).setFooter({ text: `عندك ${g.seconds} ثانية، أول جواب صح يفوز` })] });
         }
 
@@ -122,27 +122,27 @@ async function play(i, ctx, g) {
         const who = m.member ? m.member.displayName : m.author.username;
 
         if (art.available()) {
-            try {
-                const png = await art.winCard({
-                    avatarURL: m.author.displayAvatarURL({ extension: 'png', size: 256 }),
-                    name: who, game: g.game || g.title, seconds: sec, points: pts,
-                    total: doc ? doc.points : null, leveledUp, level: doc ? points.levelOf(doc.points) : 0
-                });
-                await m.reply({ files: [new AttachmentBuilder(png, { name: 'win.png' })] });
+            const png = await art.guard(art.winCard({
+                avatarURL: m.author.displayAvatarURL({ extension: 'png', size: 256 }),
+                name: who, game: g.game || g.title, seconds: sec, points: pts,
+                total: doc ? doc.points : null, leveledUp, level: doc ? points.levelOf(doc.points) : 0
+            }), 6000, 'بطاقة الفوز');
+            if (png) {
+                await m.reply({ files: [new AttachmentBuilder(png, { name: 'win.png' })] }).catch(() => {});
                 return;
-            } catch (err) { console.error('❌ فشل رسم بطاقة الفوز:', err.message); }
+            }
         }
 
         if (cards.available()) {
-            try {
-                const png = await cards.gameWinCard({
-                    avatarURL: m.author.displayAvatarURL({ extension: 'png', size: 128 }),
-                    username: m.author.username, gameTitle: g.title, seconds: sec, points: pts,
-                    totalPoints: doc ? doc.points : null, leveledUp, level: doc ? points.levelOf(doc.points) : 0
-                });
-                await m.reply({ files: [new AttachmentBuilder(png, { name: 'win.png' })] });
+            const png = await art.guard(cards.gameWinCard({
+                avatarURL: m.author.displayAvatarURL({ extension: 'png', size: 128 }),
+                username: m.author.username, gameTitle: g.title, seconds: sec, points: pts,
+                totalPoints: doc ? doc.points : null, leveledUp, level: doc ? points.levelOf(doc.points) : 0
+            }), 6000, 'بطاقة الفوز القديمة');
+            if (png) {
+                await m.reply({ files: [new AttachmentBuilder(png, { name: 'win.png' })] }).catch(() => {});
                 return;
-            } catch (err) { console.error('❌ فشل رسم بطاقة الفوز:', err.message); }
+            }
         }
 
         const tier = ctx.getTier(m.author.id, m.member);

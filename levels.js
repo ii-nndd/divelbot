@@ -62,17 +62,17 @@ async function onMessage(message) {
     if (after > before && cfg.announce) {
         // بطاقة الترقية المصممة (وإلا نص عادي لو الرسم تعطّل)
         if (art.available()) {
-            try {
-                const rank = await points.rankOf(message.guild.id, doc.points).catch(() => 0);
-                const png = await art.levelUpCard({
-                    avatarURL: message.author.displayAvatarURL({ extension: 'png', size: 256 }),
-                    name: message.member ? message.member.displayName : message.author.username,
-                    level: after, points: doc.points,
-                    lo: points.needFor(after), hi: points.needFor(after + 1), rank
-                });
+            const rank = await points.rankOf(message.guild.id, doc.points).catch(() => 0);
+            const png = await art.guard(art.levelUpCard({
+                avatarURL: message.author.displayAvatarURL({ extension: 'png', size: 256 }),
+                name: message.member ? message.member.displayName : message.author.username,
+                level: after, points: doc.points,
+                lo: points.needFor(after), hi: points.needFor(after + 1), rank
+            }), 6000, 'بطاقة الترقية');
+            if (png) {
                 await message.channel.send({ content: `${message.author}`, files: [new AttachmentBuilder(png, { name: 'level.png' })] }).catch(() => {});
                 return;
-            } catch (err) { console.error('❌ صورة الترقية:', err.message); }
+            }
         }
         message.channel.send(`🎉 مبروك ${message.author}! وصلت **المستوى ${after}**`).catch(() => {});
     }

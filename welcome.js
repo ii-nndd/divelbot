@@ -54,13 +54,12 @@ function build(cfg, v) {
 // العنوان اللي كتبه صاحب السيرفر باللوحة يصير السطر الذهبي تحت الاسم (بلا إيموجي لأنه يطلع مربع).
 async function imageFor(cfg, v) {
     if (!art.available()) return null;
-    try {
-        const sub = art.san(fill(cfg.title, v)).slice(0, 64) || ('نوّرت ' + (v.server || 'السيرفر'));
-        return await art.welcomeCard({
-            avatarURL: v.avatar, name: v.name, tag: v.handle,
-            server: v.server, count: v.count, members: v.members, subtitle: sub
-        });
-    } catch (e) { console.error('❌ صورة الترحيب:', e.message); return null; }
+    const sub = art.san(fill(cfg.title, v)).slice(0, 64) || ('نوّرت ' + (v.server || 'السيرفر'));
+    // art.guard: مهلة قصوى عشان صورة العضو لو تأخرت ما تعلّق رسالة الترحيب
+    return await art.guard(art.welcomeCard({
+        avatarURL: v.avatar, name: v.name, tag: v.handle,
+        server: v.server, count: v.count, members: v.members, subtitle: sub
+    }), 7000, 'صورة الترحيب');
 }
 
 // نفس رسالة الترحيب بس معاها الصورة (الصورة تصير هي صورة الـEmbed الكبيرة)
@@ -76,9 +75,7 @@ async function buildFull(cfg, v) {
 // صورة الوداع
 async function leaveImage(v) {
     if (!art.available()) return null;
-    try {
-        return await art.leaveCard({ avatarURL: v.avatar, name: v.name, server: v.server, count: v.count });
-    } catch (e) { console.error('❌ صورة الوداع:', e.message); return null; }
+    return await art.guard(art.leaveCard({ avatarURL: v.avatar, name: v.name, server: v.server, count: v.count }), 7000, 'صورة الوداع');
 }
 
 function init(client) {

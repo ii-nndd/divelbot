@@ -130,16 +130,16 @@ async function handle(i, ctx) {
                 }
                 const amount = D.min + Math.floor(Math.random() * (D.max - D.min + 1));
                 const doc = save(g, i.user.id, { balance: cur.balance + amount, lastDaily: Date.now() });
-                // بطاقة الراتب المصممة (نفس هوية نوفا)
+                // بطاقة الراتب المصممة (نفس هوية نوفا) — نأجّل الرد لأن الرسم + الصورة ياخذون وقت
                 if (art.available()) {
-                    try {
-                        const png = await art.dailyCard({
-                            avatarURL: i.user.displayAvatarURL({ extension: 'png', size: 256 }),
-                            name: i.member ? i.member.displayName : i.user.username,
-                            amount, balance: doc.balance, cdHours: D.cdHours
-                        });
-                        return i.reply({ files: [new AttachmentBuilder(png, { name: 'daily.png' })] });
-                    } catch (err) { console.error('❌ صورة الراتب اليومي:', err.message); }
+                    await i.deferReply().catch(() => {});
+                    const png = await art.guard(art.dailyCard({
+                        avatarURL: i.user.displayAvatarURL({ extension: 'png', size: 256 }),
+                        name: i.member ? i.member.displayName : i.user.username,
+                        amount, balance: doc.balance, cdHours: D.cdHours
+                    }), 6000, 'بطاقة الراتب اليومي');
+                    if (png) return i.editReply({ files: [new AttachmentBuilder(png, { name: 'daily.png' })] }).catch(() => {});
+                    return i.editReply(`${COIN} استلمت راتبك اليومي: **+${amount}**\nرصيدك الآن: **${doc.balance}** ${COIN}`).catch(() => {});
                 }
                 return i.reply(`${COIN} استلمت راتبك اليومي: **+${amount}**\nرصيدك الآن: **${doc.balance}** ${COIN}`);
             }

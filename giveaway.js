@@ -54,11 +54,12 @@ async function startPayload(prize, winners, endsAt, by, entrants = 0) {
     const e = embedFor(prize, winners, endsAt, by);
     const payload = { embeds: [e], components: [joinRow()] };
     if (art.available()) {
-        try {
-            const buf = await art.giveawayCard({ prize, winners, endsAt, by, entrants });
+        // بمهلة قصوى: لو الرسم تعطّل نرسل القرعة نص عادي بدل ما نعلّق الأمر
+        const buf = await art.guard(art.giveawayCard({ prize, winners, endsAt, by, entrants }), 6000, 'بانر القرعة');
+        if (buf) {
             e.setImage('attachment://giveaway.png');
             payload.files = [new AttachmentBuilder(buf, { name: 'giveaway.png' })];
-        } catch (err) { console.error('❌ بانر القرعة:', err.message); }
+        }
     }
     return payload;
 }
@@ -151,7 +152,9 @@ async function handle(i, ctx) {
             const mins = i.options.getInteger('الدقائق');
             const winners = i.options.getInteger('الفائزين') || 1;
             const endsAt = Date.now() + mins * 60_000;
-            await i.reply(await startPayload(prize, winners, endsAt, i.user.username, 0));
+            // نأجّل الرد: رسم البانر ياخذ وقت، ومهلة ديسكورد ٣ ثواني
+            await i.deferReply().catch(() => {});
+            await i.editReply(await startPayload(prize, winners, endsAt, i.user.username, 0));
             const msg = await i.fetchReply();
             register(i.client, msg, { guildId: i.guild.id, channelId: i.channel.id, prize, winners, endsAt });
         } else {

@@ -4,6 +4,8 @@ const path = require('path');
 let canvasLib = null;
 try { canvasLib = require('@napi-rs/canvas'); }
 catch { console.error('⚠️ @napi-rs/canvas غير مثبت، البطاقات معطلة (الأوامر ترجع نص عادي بدلها)'); }
+// نستعير محمّل الصور من art.js: عنده مهلة ٦ ثواني + كاش، يعني صورة العضو ما تعلّق البطاقة أبداً
+const art = require('./art');
 
 const FONT_PATH = path.join(__dirname, 'Layla-Thuluth.ttf');
 const FONT_FAMILY = 'Layla';
@@ -84,12 +86,10 @@ function corner(ctx, x, y, sx, sy, len, color) {
 async function drawAvatar(ctx, url, cx, cy, r) {
     ctx.save();
     ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.closePath(); ctx.clip();
-    try {
-        const img = await canvasLib.loadImage(url);
-        ctx.drawImage(img, cx - r, cy - r, r * 2, r * 2);
-    } catch {
-        ctx.fillStyle = '#2a2836'; ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
-    }
+    // art.loadImg: مهلة ٦ ثواني + كاش (الصورة المعلّقة ما توقف البطاقة — نرسم دائرة رمادية)
+    const img = url ? await art.loadImg(url).catch(() => null) : null;
+    if (img) ctx.drawImage(img, cx - r, cy - r, r * 2, r * 2);
+    else { ctx.fillStyle = '#2a2836'; ctx.fillRect(cx - r, cy - r, r * 2, r * 2); }
     ctx.restore();
     ctx.lineWidth = 6; ctx.strokeStyle = CRIMSON;
     ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();

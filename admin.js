@@ -1,8 +1,9 @@
 // أوامر إدارة السيرفر
 // owner = ارثر وإيدا فقط | royal = ارثر وإيدا + أصحاب الرتبة الملكية
-const { SlashCommandBuilder, EmbedBuilder, ChannelType, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ChannelType, MessageFlags, AttachmentBuilder } = require('discord.js');
 const store = require('./store');
 const jail = require('./jail');
+const art = require('./art');
 
 const EPH = MessageFlags.Ephemeral;
 const cmd = (n, d) => new SlashCommandBuilder().setName(n).setDescription(d).setDMPermission(false);
@@ -42,6 +43,9 @@ const defs = [
     [cmd('اعلان', 'إرسال إعلان ملكي')
         .addStringOption(o => o.setName('النص').setDescription('نص الإعلان').setRequired(true).setMaxLength(1500))
         .addStringOption(o => o.setName('العنوان').setDescription('عنوان الإعلان').setMaxLength(100))
+        .addStringOption(o => o.setName('الشكل').setDescription('كيف ينرسل الإعلان؟ (الافتراضي صورة مصممة)').addChoices(
+            { name: '🖼️ صورة مصممة', value: 'img' },
+            { name: '📝 نص عادي', value: 'txt' }))
         .addChannelOption(o => o.setName('الروم').setDescription('الروم (الافتراضي الحالي)').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)), 'owner'],
     [cmd('تحذير', 'إعطاء تحذير لعضو').addUserOption(member)
         .addStringOption(o => o.setName('السبب').setDescription('السبب').setRequired(true).setMaxLength(200)), 'royal'],
@@ -70,6 +74,37 @@ async function done(i, ctx, text) {
 const fail = (i, text) => (i.deferred || i.replied)
     ? i.editReply('⚠️ ' + text)
     : i.reply({ content: '⚠️ ' + text, flags: EPH });
+
+// ===== الإعلان الملكي =====
+// خياران: «صورة مصممة» (بطاقة نوفا: العنوان + النص + صاحب الإعلان) أو «نص عادي» (Embed).
+// يستخدمه أمر /اعلان وصفحة «الإعلانات» باللوحة — نفس الشكل بالضبط.
+const MENTION_RE = /@everyone|@here|<@&\d+>|<@!?\d+>/g;
+async function announcePayload({ title, text, by, image = true, server, avatarURL, name, sub, footerBy }) {
+    const head = title || '📢 إعلان ملكي';
+    const body = String(text == null ? '' : text).trim();
+    const embed = new EmbedBuilder().setColor(0xb3121e).setTitle(head)
+        .setFooter({ text: footerBy ? `بأمر ${footerBy}` : 'من لوحة نوفا' }).setTimestamp();
+    const payload = { embeds: [embed] };
+
+    if (image && art.available()) {
+        // النص كامل داخل الصورة، ونخلي المنشنات بالكونتنت عشان التنبيه يشتغل مثل ما هو
+        const png = await art.guard(art.noticeCard({
+            title: head, iconName: 'horn', tone: 'gold', server,
+            avatarURL, name, sub: sub || 'إعلان من إدارة السيرفر',
+            lines: body.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 40)
+        }), 7000, 'صورة الإعلان');
+        if (png) {
+            const mentions = [...new Set(body.match(MENTION_RE) || [])].join(' ');
+            if (mentions) payload.content = mentions;
+            embed.setImage('attachment://announce.png');
+            payload.files = [new AttachmentBuilder(png, { name: 'announce.png' })];
+            return payload;
+        }
+        console.warn('⚠️ تعذّر رسم صورة الإعلان — نرسله نص عادي.');
+    }
+    embed.setDescription(body.slice(0, 3900));
+    return payload;
+}
 
 // فحص العضو المستهدف
 function badTarget(i, t, tier, ctx) {
@@ -194,12 +229,19 @@ async function run(i, tier, ctx) {
         }
         case 'اعلان': {
             const ch = o.getChannel('الروم') || i.channel;
-            const embed = new EmbedBuilder().setColor(0xb3121e)
-                .setTitle(o.getString('العنوان') || '📢 إعلان ملكي')
-                .setDescription(o.getString('النص'))
-                .setFooter({ text: `بأمر ${i.user.username}` }).setTimestamp();
-            await ch.send({ embeds: [embed] });
-            return done(i, ctx, `📨 تم إرسال الإعلان في ${ch}`);
+            const text = o.getString('النص');
+            const title = o.getString('العنوان') || '📢 إعلان ملكي';
+            const image = (o.getString('الشكل') || 'img') === 'img';
+            // نأجّل الرد: رسم الصورة + تنزيل صورة المرسل ياخذ وقت، ومهلة ديسكورد ٣ ثواني
+            await i.deferReply().catch(() => {});
+            const payload = await announcePayload({
+                title, text, image, server: i.guild && i.guild.name,
+                avatarURL: i.user.displayAvatarURL({ extension: 'png', size: 256 }),
+                name: i.member ? i.member.displayName : i.user.username,
+                by: i.user.username, footerBy: i.user.username
+            });
+            await ch.send(payload);
+            return done(i, ctx, `📨 تم إرسال الإعلان في ${ch}${image ? ' (كصورة مصممة 🖼️)' : ''}${image && !payload.files ? ' — تعذّر الرسم فرُسل نص عادي' : ''}`);
         }
         case 'تحذير': {
             const t = await needTarget(); if (!t) return;
@@ -268,4 +310,4 @@ async function handle(i, ctx) {
     return true;
 }
 
-module.exports = { commands, handle, run, LEVEL };
+module.exports = { commands, handle, run, LEVEL, announcePayload };

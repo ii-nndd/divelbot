@@ -16,6 +16,7 @@ const colors = require('./colors');
 const replies = require('./replies');
 const economy = require('./economy');
 const giveaway = require('./giveaway');
+const admin = require('./admin');
 
 // الرابط العام: يُقرأ وقت الطلب (مو وقت الإقلاع) لأن النفق التلقائي يضبطه بعد الإقلاع
 const BASE = () => (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'https://divelbot.onrender.com').replace(/\/+$/, '');
@@ -43,7 +44,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-10-18.5';
+const BUILD = '2026-10-18.6';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -609,7 +610,9 @@ api('colors/stats').then(function(s){c.roles.forEach(function(r){if(counts[r.id]
 return Promise.resolve()})};
 pages.announce=function(m){return api('channels').then(function(d){m.appendChild(el('h1',{text:'الإعلانات'}));
 var ch=el('select',{},d.channels.filter(function(c){return c.type==='text'}).map(function(c){return opt(c.id,'# '+c.name)})),t=el('input',{placeholder:'العنوان (اختياري)',style:'width:100%;margin:10px 0'}),x=el('textarea',{placeholder:'نص الإعلان'});
-m.appendChild(card('',el('div',{},[ch,t,x,el('div',{style:'margin-top:10px'},[el('button',{class:'btn',text:'إرسال الإعلان',on:{click:function(){go(api('announce',{channelId:ch.value,title:t.value,text:x.value}),'انرسل ✅')}}})])])))})};
+var img=sw(true,function(){});
+m.appendChild(card('🖼️ شكل الإعلان',el('div',{class:'row'},[img,el('span',{class:'mut',text:'إرسال الإعلان كصورة مصممة (بطاقة نوفا)'})])));
+m.appendChild(card('',el('div',{},[ch,t,x,el('div',{style:'margin-top:10px'},[el('button',{class:'btn',text:'إرسال الإعلان',on:{click:function(){go(api('announce',{channelId:ch.value,title:t.value,text:x.value,image:img.querySelector('input').checked}),'انرسل ✅')}}})])])))})};
 pages.members=function(m){m.appendChild(el('h1',{text:'الأعضاء'}));
 var q=el('input',{placeholder:'ابحث بالاسم',style:'flex:1;min-width:160px'}),box=el('div',{class:'card'});
 function act(path,body,msg){go(api(path,body),msg,null);setTimeout(load,900)}
@@ -1289,8 +1292,17 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         const c = chan(g, b.channelId);
         if (!c.isTextBased() || c.isVoiceBased()) throw new Error('اختر روم نصي');
         const text = String(b.text || '').trim().slice(0, 1800); if (!text) throw new Error('النص فاضي');
-        await c.send({ embeds: [new EmbedBuilder().setColor(0xb3121e).setTitle(clean(b.title) || '📢 إعلان ملكي').setDescription(text).setFooter({ text: `بأمر ${req.user.name}` }).setTimestamp()] });
-        note(req, `إعلان في #${c.name}`);
+        const image = b.image !== false;
+        // صورة المرسل + اسمه على البطاقة (لو ما قدرنا نجيبه نرسم بدون صورة)
+        const me = await g.members.fetch(req.user.id).catch(() => null);
+        const payload = await admin.announcePayload({
+            title: clean(b.title) || '📢 إعلان ملكي', text, image, server: g.name,
+            avatarURL: me ? me.displayAvatarURL({ extension: 'png', size: 256 }) : null,
+            name: me ? me.displayName : req.user.name,
+            footerBy: req.user.name
+        });
+        await c.send(payload);
+        note(req, `إعلان في #${c.name}${image ? ' (صورة 🖼️)' : ' (نص)'}`);
     }));
 
     const mInfo = (m) => ({
