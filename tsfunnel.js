@@ -146,8 +146,9 @@ async function waitSocket(ms = 45_000) {
 }
 
 // تفعيل Funnel الرابط الثابت
+let lastFunnelMsg = null;   // آخر سبب فشل (نطبعه مرة وحدة بدل ٢٠ مرة)
 function enableFunnel(port) {
-    const target = 'http://127.0.0.1:' + port;
+    const target = 'http://127.0.0.1:' + port;   // توثيق Tailscale: البروكسي يدعم http://127.0.0.1 فقط
     const tries = [
         ['funnel', '--bg', '--https=443', target],
         ['funnel', '--bg', '--https=443', String(port)],
@@ -163,6 +164,11 @@ function enableFunnel(port) {
             if (typeof module.exports.onNeedFunnel === 'function') module.exports.onNeedFunnel(enableLink);
         }
         if (r.code === 0 && !/error|not enabled/i.test(text)) return true;
+        // نطبع سبب الفشل من الـCLI (مثلاً HTTPS مو مفعّل) — مفيد جداً لتشخيص اللوحة
+        if (text && !m) {
+            const line = text.split('\n').map((s) => s.trim()).filter(Boolean).slice(-1)[0].slice(0, 240);
+            if (line && line !== lastFunnelMsg) { lastFunnelMsg = line; log('Funnel ما انفعّل بعد: ' + line); }
+        }
     }
     return false;
 }
@@ -188,15 +194,19 @@ async function loop(port, dnsName) {
     log('توقفت محاولات الفتح — فعّل Funnel من الرابط أعلاه وأعد تشغيل البوت');
 }
 
+// التأكد من الوصول للرابط الثابت.
+// ⚠️ توثيق Tailscale: سجلات DNS العامة للرابط قد تتأخر **حتى ١٠ دقايق** → نتحقق بصبر
+// (كان ٩٦ ثانية بس → يطلع تحذير كاذب «ما تأكد» قبل ما ينتشر الـDNS).
 async function verify(base) {
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 40; i++) {
         try {
             const r = await fetch(base + '/health', { signal: AbortSignal.timeout(15_000) });
             if (r.ok) { log('✅ الرابط الثابت يشتغل'); return; }
         } catch {}
-        await sleep(8000);
+        if (i && i % 8 === 0) log('… اللوحة للحين ما انتشرت (DNS قد يحتاج دقايق) — أكمل الفحص بالخلفية');
+        await sleep(15_000);
     }
-    log('⚠️ الرابط الثابت ما تأكد — انتظر دقيقة وجرّب تفتحه');
+    log('⚠️ ما تأكد الرابط بعد ~١٠ دقايق — تأكد أن Funnel مفعّل ثم افتح ' + base + '/health');
 }
 
 // نقطة التشغيل: true = Tailscale شغال (نتجاهل Cloudflare)، false = جرّب Cloudflare
