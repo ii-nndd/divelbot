@@ -15,14 +15,13 @@ const https = require('https');
 const tls = require('tls');
 
 const TS_HOSTS = ['tailscale.com', 'login.tailscale.com', 'controlplane.tailscale.com', 'pkgs.tailscale.com'];
-const DOH_HOSTS = ['dns.google', 'cloudflare-dns.com'];
 const IPINFO = 'https://ipinfo.io/json';
 
 const C = { ok: '\u2705', no: '\u274c', warn: '\u26a0\ufe0f', dot: '\u2022' };
 
-function httpGet(url, timeout = 15000) {
+function httpGet(url, timeout = 15000, accept = 'application/json') {
     return new Promise((res) => {
-        const req = https.get(url, { timeout, headers: { 'user-agent': 'node-check', accept: 'application/json' } }, (r) => {
+        const req = https.get(url, { timeout, headers: { 'user-agent': 'node-check', accept } }, (r) => {
             let b = '';
             r.on('data', (c) => (b += c));
             r.on('end', () => res({ status: r.statusCode, body: b }));
@@ -51,14 +50,17 @@ function sniTest(host, ip) {
     // ١) عنوان الخروج = هل VPN شغال فعلاً؟
     console.log('١) الترافيك يمر من وين؟');
     const info = await httpGet(IPINFO);
-    let org = '', ip = '';
+    let org = '', ip = '', country = '', city = '';
     try {
         const j = JSON.parse(info.body);
-        ip = j.ip; org = (j.org || '') + ' — ' + (j.city || '') + ' ' + (j.country || '');
+        ip = j.ip; org = j.org || ''; country = j.country || ''; city = j.city || '';
     } catch { org = 'تعذّر الفحص (' + info.status + ')'; }
-    const vpn = /proton|m247|datacamp|leaseweb|choopa|vultr|cogent|nordvpn|surfshark|mullvad|ovh|hetzner|amazon|cloudflare|warp/i.test(org);
-    console.log('   ' + C.dot + ' الخروج: ' + (ip || '?') + '  |  ' + org);
-    console.log('   ' + (vpn ? C.ok + ' يبدو VPN شغال (الترافيك مو من مزوّدك مباشرة)' : C.no + ' الترافيك من مزوّد الخدمة مباشرة (VPN مو شغال فعلاً)'));
+    // الحكم: لو الخروج من عُمان = مازلنا على مزوّدنا (VPN ما يمرّر). وغير كذا = شبكة خارجية (VPN شغال غالباً).
+    const localIsp = /^OM$/i.test(country) || /omantel|ooredoo|as28885|awasr/i.test(org);
+    const vpnKnown = /proton|nforce|serverius|datacamp|m247|leaseweb|choopa|vultr|cogent|nord|surfshark|mullvad|ovh|hetzner|cloudflare|warp|zenlayer|gcore|melbicom|misaka|perfect privacy|flokinet/i.test(org);
+    const vpn = vpnKnown || (!localIsp && !!country);
+    console.log('   ' + C.dot + ' الخروج: ' + (ip || '?') + '  |  ' + org + (city ? ' — ' + city : '') + (country ? ' ' + country : ''));
+    console.log('   ' + (vpn ? C.ok + ' الترافيك يمر من شبكة خارجية مو مزوّدك (VPN شغال ✓)' : C.no + ' الترافيك من مزوّدك مباشرة (VPN ما يمرّر — أعد تشغيله)'));
 
     // ٢) نطاقات Tailscale: DNS + SNI
     console.log('\n٢) نطاقات Tailscale:');
@@ -78,12 +80,17 @@ function sniTest(host, ip) {
             ' DNS=' + (dnsPoison ? '0.0.0.0 (مسموم)' : ips.slice(0, 2).join(',')) + ' | TLS=' + sni);
     }
 
-    // ٣) هل وصول DoH محجوب أيضاً؟
+    // ٣) هل وصول DoH محجوب أيضاً؟ (كل نطاق بنقطته الصحيحة)
     console.log('\n٣) نطاقات DoH (يستخدمها المتصفح للتحايل على DNS) :');
-    for (const h of DOH_HOSTS) {
+    const DOH_URLS = [
+        ['dns.google', 'https://dns.google/resolve?name=example.com&type=A', 'application/dns-json'],
+        ['cloudflare-dns.com', 'https://cloudflare-dns.com/dns-query?name=example.com&type=A', 'application/dns-json']
+    ];
+    for (const [h, url, accept] of DOH_URLS) {
         const t0 = Date.now();
-        const r = await httpGet('https://' + h + '/dns-query?name=example.com&type=A');
-        console.log('   ' + (r.status === 200 ? C.ok : C.no) + ' ' + h.padEnd(24) + ' → ' + r.status + ' (' + (Date.now() - t0) + 'ms)');
+        const r = await httpGet(url, 15000, accept);
+        const ok = r.status === 200;
+        console.log('   ' + (ok ? C.ok : C.no) + ' ' + h.padEnd(24) + ' → ' + r.status + ' (' + (Date.now() - t0) + 'ms)');
     }
 
     // ٤) بدائل متاحة لو الـVPN ما ضبط (تُفحص من نفس الشبكة)
