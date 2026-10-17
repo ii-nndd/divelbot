@@ -86,8 +86,23 @@ function sniTest(host, ip) {
         console.log('   ' + (r.status === 200 ? C.ok : C.no) + ' ' + h.padEnd(24) + ' → ' + r.status + ' (' + (Date.now() - t0) + 'ms)');
     }
 
-    // ٤) نطاق الرابط الثابت *.ts.net (هل يفتح من جهتك بدون VPN؟)
-    console.log('\n٤) نطاق الرابط الثابت (*.ts.net):');
+    // ٤) بدائل متاحة لو الـVPN ما ضبط (تُفحص من نفس الشبكة)
+    console.log('\n٤) بدائل مجانية بلا حساب (تُستخدم لو الـVPN ما ضبط):');
+    const ALTS = [
+        ['engage.cloudflareclient.com', 'Cloudflare WARP — تطبيق 1.1.1.1 المجاني (المسار الأسهل)'],
+        ['one.one.one.one', 'صفحة تنزيل تطبيق 1.1.1.1'],
+        ['dash.cloudflare.com', 'لوحة Cloudflare (لخطة رابط ثابت عبر Workers لاحقاً)']
+    ];
+    for (const [h, what] of ALTS) {
+        const ips = await resolve(h);
+        const poisoned = !ips || ips.includes('0.0.0.0');
+        const t = poisoned ? null : await sniTest(h, ips[0]);
+        const ok = !poisoned && t === 'ok';
+        console.log('   ' + (ok ? C.ok : C.no) + ' ' + h.padEnd(30) + (ok ? 'متاح ✓' : 'محجوب') + ' — ' + what);
+    }
+
+    // ٥) نطاق الرابط الثابت *.ts.net (هل يفتح من جهتك بدون VPN؟)
+    console.log('\n٥) نطاق الرابط الثابت (*.ts.net):');
     const fakeTsNet = 'nova-bot-probe.tail0abc.ts.net';
     const tsnetDns = await resolve(fakeTsNet);
     const tsnetSni = await sniTest(fakeTsNet, (tsnetDns && tsnetDns[0]) || '1.1.1.1');
@@ -95,7 +110,7 @@ function sniTest(host, ip) {
     console.log('   ' + (tsnetReset ? C.no + ' يقطع اتصالات *.ts.net (اللوحة راح تحتاج VPN)' : C.ok + ' ما يقطع اتصالات *.ts.net → رابط اللوحة الثابت يفتح بدون VPN') + '  [' + (tsnetDns ? tsnetDns[0] : 'اسم تجريبي بلا DNS (طبيعي)') + ' / TLS=' + tsnetSni + ']');
     console.log('     ' + C.warn + ' فحص تقريبي: نتأكد أن فحص SNI ما يقطع نطاق *.ts.net (الاسم التجريبي مو موجود فما ينتظر منه رد).');
 
-    // ٥) الحكم
+    // ٦) الحكم
     console.log('\n------------------------------------- النتيجة -------------------------------------');
     if (usable === TS_HOSTS.length) {
         console.log(C.ok + ' كل نطاقات Tailscale تشتغل من جهتك — سوِّ خطوات الرابط الثابت الآن:');
@@ -104,8 +119,11 @@ function sniTest(host, ip) {
         console.log('   3) الصق TS_AUTHKEY و TS_HOSTNAME في .env داخل novabot-main ← Restart');
     } else {
         console.log(C.no + ' محجوب: ' + blocked + ' من ' + TS_HOSTS.length + ' نطاقات.');
-        console.log('   الحل: ' + (vpn ? 'أعد الاتصال بالـVPN (نفق مو شغال صح) أو جرّب سيرفر ثاني.' : 'شغّل ProtonVPN وتأكد أن الترافيك يمر منه، ثم أعد هذا الفحص.'));
-        console.log('   بديل: سوِّ الخطوات من الجوال على بيانات شبكة ثانية (مو نفس المزوّد) — أو من شبكة فيها VPN شغال.');
+        console.log('   الحلول بالترتيب (الأسهل أولاً):');
+        console.log('   1) أعد تشغيل ProtonVPN وتأكد أن الترافيك يمر منه فعلاً (كرّر هذا الأمر).');
+        console.log('   2) ثبّت تطبيق **1.1.1.1 (Cloudflare WARP)** من <https://one.one.one.one> — مجاني بلا حساب وبلا بطاقة،');
+        console.log('      ونقطة اتصاله مفتوحة عندك (شوف القسم ٤ فوق) → شغّله ثم أعد هذا الفحص.');
+        console.log('   3) سوِّ خطوات Tailscale من شبكة ثانية (بيانات/راوتر مزوّد آخر) — الشبكة نفسها غالباً محجوبة.');
     }
     console.log('\n' + C.warn + ' ملاحظة: الحجب على جهازك فقط — البوت على Wispbyte يتصل بـTailscale عادي (شبكتهم مو محجوبة).\n');
 })();
