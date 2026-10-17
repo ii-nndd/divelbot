@@ -4,9 +4,10 @@
 //  - المجموع (Total XP) = كتابي + صوتي + مكافآت الألعاب/الإدارة.
 //  - الترتيب بالسيرفر + أمر /رتبة و /rank وبطاقة صورة احترافية.
 // كل المعدلات تتعدل من لوحة التحكم (/dashboard) — صفحة "المستويات".
-const { SlashCommandBuilder, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags, AttachmentBuilder } = require('discord.js');
 const store = require('./store');
 const points = require('./points');
+const art = require('./art');
 
 const DEF = {
     textEnabled: true, textMin: 5, textMax: 15, textCd: 60,      // خبرة كتابية: من/إلى/كل كم ثانية
@@ -59,6 +60,20 @@ async function onMessage(message) {
     if (!doc) return;
     const before = points.levelOf(doc.points - gain), after = points.levelOf(doc.points);
     if (after > before && cfg.announce) {
+        // بطاقة الترقية المصممة (وإلا نص عادي لو الرسم تعطّل)
+        if (art.available()) {
+            try {
+                const rank = await points.rankOf(message.guild.id, doc.points).catch(() => 0);
+                const png = await art.levelUpCard({
+                    avatarURL: message.author.displayAvatarURL({ extension: 'png', size: 256 }),
+                    name: message.member ? message.member.displayName : message.author.username,
+                    level: after, points: doc.points,
+                    lo: points.needFor(after), hi: points.needFor(after + 1), rank
+                });
+                await message.channel.send({ content: `${message.author}`, files: [new AttachmentBuilder(png, { name: 'level.png' })] }).catch(() => {});
+                return;
+            } catch (err) { console.error('❌ صورة الترقية:', err.message); }
+        }
         message.channel.send(`🎉 مبروك ${message.author}! وصلت **المستوى ${after}**`).catch(() => {});
     }
 }

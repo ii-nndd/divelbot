@@ -1,7 +1,11 @@
 // نظام الترحيب: رسالة عند دخول عضو، رسالة وداع، ورتبة تلقائية.
 // الإعدادات لكل سيرفر وتتعدل من /dashboard (صفحة الترحيب).
-const { EmbedBuilder } = require('discord.js');
+// ← كل رسالة ترحيب تجي معاها صورة «ولكم» مصممة (art.js): صورة العضو + الاسم + رقم العضوية.
+const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const store = require('./store');
+const art = require('./art');
+
+const IMG = 'nova-welcome.png', IMG_LEAVE = 'nova-leave.png';
 
 const DEFAULT = {
     enabled: false,
@@ -45,6 +49,38 @@ function build(cfg, v) {
     return { content: v.mention, embeds: [e], allowedMentions: { users: v.id ? [v.id] : [] } };
 }
 
+// ===== الصور (art.js) =====
+// صورة الترحيب: «ولكم» + صورة العضو + الاسم + عدد الأعضاء.
+// العنوان اللي كتبه صاحب السيرفر باللوحة يصير السطر الذهبي تحت الاسم (بلا إيموجي لأنه يطلع مربع).
+async function imageFor(cfg, v) {
+    if (!art.available()) return null;
+    try {
+        const sub = art.san(fill(cfg.title, v)).slice(0, 64) || ('نوّرت ' + (v.server || 'السيرفر'));
+        return await art.welcomeCard({
+            avatarURL: v.avatar, name: v.name, tag: v.handle,
+            server: v.server, count: v.count, members: v.members, subtitle: sub
+        });
+    } catch (e) { console.error('❌ صورة الترحيب:', e.message); return null; }
+}
+
+// نفس رسالة الترحيب بس معاها الصورة (الصورة تصير هي صورة الـEmbed الكبيرة)
+async function buildFull(cfg, v) {
+    const msg = build(cfg, v);
+    const buf = await imageFor(cfg, v);
+    if (!buf) return msg;
+    msg.embeds[0].setImage('attachment://' + IMG);
+    msg.files = [new AttachmentBuilder(buf, { name: IMG })];
+    return msg;
+}
+
+// صورة الوداع
+async function leaveImage(v) {
+    if (!art.available()) return null;
+    try {
+        return await art.leaveCard({ avatarURL: v.avatar, name: v.name, server: v.server, count: v.count });
+    } catch (e) { console.error('❌ صورة الوداع:', e.message); return null; }
+}
+
 function init(client) {
     client.on('guildMemberAdd', async (m) => {
         try {
@@ -53,9 +89,10 @@ function init(client) {
             if (!cfg.enabled || !cfg.channelId) return;
             const ch = await m.guild.channels.fetch(cfg.channelId).catch(() => null);
             if (!ch || !ch.isTextBased()) return;
-            await ch.send(build(cfg, {
-                id: m.id, mention: `<@${m.id}>`, name: m.displayName, server: m.guild.name,
-                count: m.guild.memberCount, avatar: m.user.displayAvatarURL()
+            await ch.send(await buildFull(cfg, {
+                id: m.id, mention: `<@${m.id}>`, name: m.displayName, handle: m.user.username,
+                server: m.guild.name, count: m.guild.memberCount, members: m.guild.memberCount,
+                avatar: m.user.displayAvatarURL({ size: 256 })
             }));
         } catch (err) { console.error('❌ ترحيب:', err.message); }
     });
@@ -67,12 +104,18 @@ function init(client) {
             const ch = await m.guild.channels.fetch(cfg.channelId).catch(() => null);
             if (!ch || !ch.isTextBased()) return;
             const name = (m.user && m.user.username) || 'عضو';
-            await ch.send({
+            const buf = m.user ? await leaveImage({
+                avatar: m.user.displayAvatarURL({ size: 256 }), name,
+                server: m.guild.name, count: m.guild.memberCount
+            }) : null;
+            const payload = {
                 content: fill(cfg.leaveMessage, { mention: name, name, server: m.guild.name, count: m.guild.memberCount }).slice(0, 1900),
                 allowedMentions: { parse: [] }
-            });
+            };
+            if (buf) payload.files = [new AttachmentBuilder(buf, { name: IMG_LEAVE })];
+            await ch.send(payload);
         } catch (err) { console.error('❌ وداع:', err.message); }
     });
 }
 
-module.exports = { init, get, set, build };
+module.exports = { init, get, set, build, buildFull, imageFor, leaveImage, IMG, IMG_LEAVE };

@@ -43,7 +43,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-10-18.4';
+const BUILD = '2026-10-18.5';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -635,7 +635,14 @@ m.appendChild(card('ترحيب الداخلين',el('div',{},[lab('تفعيل ا
 m.appendChild(card('رسالة الوداع (نفس الروم)',el('div',{},[lab('تفعيل رسالة الوداع',le),lm])));
 m.appendChild(card('رتبة تلقائية للداخلين',rl));
 m.appendChild(row([el('button',{class:'btn',text:'حفظ',on:{click:function(){go(api('welcome/save',body()),'انحفظ ✅',null)}}}),
-el('button',{class:'b2',text:'جرّب الترحيب',on:{click:function(){api('welcome/save',body()).then(function(){return api('welcome/test',{})}).then(function(){toast('انرسلت رسالة تجربة ✅')}).catch(function(e){toast(e.message,1)})}}})]))})};
+el('button',{class:'b2',text:'جرّب الترحيب',on:{click:function(){api('welcome/save',body()).then(function(){return api('welcome/test',{})}).then(function(){toast('انرسلت رسالة تجربة ✅')}).catch(function(e){toast(e.message,1)})}}})]));
+var pv=el('img',{style:'width:100%;border-radius:14px;margin-top:12px;display:none'});
+m.appendChild(card('صورة الترحيب 🖼️',el('div',{},[
+el('div',{class:'mut',text:'هذي الصورة تنرسل مع كل ترحيب جديد: «ولكم» + صورة العضو + الاسم + الترتيب. السطر الذهبي تحت الاسم هو العنوان اللي فوق.'}),
+el('p'),
+row([el('button',{class:'b2',text:'🖼️ معاينة الصورة الآن',on:{click:function(){api('welcome/save',body()).then(function(){return api('welcome/preview')}).then(function(d){pv.src=d.image;pv.style.display='block';toast('هذي صورة ترحيبك ✅')}).catch(function(e){toast(e.message,1)})}}})]),
+pv
+])))})};
 pages.tickets=function(m){return api('tickets').then(function(d){var c=d.config;
 m.appendChild(el('h1',{text:'التذاكر'}));m.appendChild(el('div',{class:'mut',text:'التذاكر المفتوحة الآن: '+d.open+' • المتغير {user} في رسالة الترحيب يمنشن صاحب التذكرة'}));
 function lab(t,k){return el('label',{class:'row',style:'margin:10px 0'},[k,el('span',{text:t})])}
@@ -1394,8 +1401,27 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         const cfg = welcome.get(g.id);
         if (!cfg.channelId) throw new Error('اختر روم الترحيب واحفظ أول');
         const c = chan(g, cfg.channelId);
-        await c.send(welcome.build(cfg, { id: req.user.id, mention: `<@${req.user.id}>`, name: req.user.name, server: g.name, count: g.memberCount }));
+        const me = await g.members.fetch(req.user.id).catch(() => null);
+        await c.send(await welcome.buildFull(cfg, {
+            id: req.user.id, mention: `<@${req.user.id}>`,
+            name: (me && me.displayName) || req.user.name, handle: me ? me.user.username : req.user.name,
+            server: g.name, count: g.memberCount, members: g.memberCount,
+            avatar: me ? me.displayAvatarURL({ size: 256 }) : ''
+        }));
         note(req, 'تجربة رسالة الترحيب');
+    }));
+
+    // معاينة صورة الترحيب داخل اللوحة (بدون ما ترسل شي بالديسكورد)
+    api.get('/welcome/preview', h(async (g, b, req) => {
+        const me = await g.members.fetch(req.user.id).catch(() => null);
+        const buf = await welcome.imageFor(welcome.get(g.id), {
+            id: req.user.id, mention: `<@${req.user.id}>`,
+            name: (me && me.displayName) || req.user.name, handle: me ? me.user.username : req.user.name,
+            server: g.name, count: g.memberCount, members: g.memberCount,
+            avatar: me ? me.displayAvatarURL({ size: 256 }) : ''
+        });
+        if (!buf) throw new Error('تعذّر توليد الصورة (تأكد من @napi-rs/canvas وملف Layla-Thuluth.ttf)');
+        return { ok: true, image: 'data:image/png;base64,' + buf.toString('base64') };
     }));
 
     api.get('/tickets', h(async (g) => {

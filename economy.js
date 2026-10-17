@@ -1,6 +1,7 @@
 // نظام اقتصاد نوفا: عملة يومية + رصيد + تحويل + متجر رتب (MongoDB عبر store.js)
-const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, MessageFlags, AttachmentBuilder } = require('discord.js');
 const store = require('./store');
+const art = require('./art');
 
 const EPH = MessageFlags.Ephemeral;
 const COIN = '🪙';
@@ -129,6 +130,17 @@ async function handle(i, ctx) {
                 }
                 const amount = D.min + Math.floor(Math.random() * (D.max - D.min + 1));
                 const doc = save(g, i.user.id, { balance: cur.balance + amount, lastDaily: Date.now() });
+                // بطاقة الراتب المصممة (نفس هوية نوفا)
+                if (art.available()) {
+                    try {
+                        const png = await art.dailyCard({
+                            avatarURL: i.user.displayAvatarURL({ extension: 'png', size: 256 }),
+                            name: i.member ? i.member.displayName : i.user.username,
+                            amount, balance: doc.balance, cdHours: D.cdHours
+                        });
+                        return i.reply({ files: [new AttachmentBuilder(png, { name: 'daily.png' })] });
+                    } catch (err) { console.error('❌ صورة الراتب اليومي:', err.message); }
+                }
                 return i.reply(`${COIN} استلمت راتبك اليومي: **+${amount}**\nرصيدك الآن: **${doc.balance}** ${COIN}`);
             }
             case 'رصيد': {

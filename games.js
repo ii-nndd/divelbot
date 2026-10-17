@@ -3,6 +3,7 @@ const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder, MessageFlags } = r
 const points = require('./points');
 const R = require('./replies');
 const cards = require('./cards');
+const art = require('./art');
 
 const EPH = MessageFlags.Ephemeral;
 const active = new Set();      // رومات فيها لعبة شغالة
@@ -30,7 +31,7 @@ const games = {
         const s = pick(sentences());
         return {
             title: '⌨️ سرعة الكتابة', body: `اكتب الجملة بأسرع ما تقدر:\n\n## ${s}`, seconds: 30, answer: s,
-            cardMain: s, cardSmall: 'اكتب الجملة بأسرع ما تقدر',
+            cardMain: s, cardSmall: 'اكتب الجملة بالضبط بأسرع ما تقدر', kind: 'text', iconName: 'type', game: 'سرعة الكتابة',
             check: (t) => norm(t) === norm(s), pts: (sec) => Math.max(5, Math.round(20 - sec))
         };
     },
@@ -42,7 +43,7 @@ const games = {
         const ans = op === '+' ? a + b : op === '-' ? a - b : a * b;
         return {
             title: '🧮 رياضيات سريعة', body: `كم ناتج:\n\n## ${a} ${op} ${b}`, seconds: 15, answer: ans,
-            cardMain: `${a} ${op} ${b}`, cardSmall: 'كم الناتج؟',
+            cardMain: `${a} ${op} ${b}`, cardSmall: 'اكتب الناتج أرقام فقط', kind: 'digits', iconName: 'bolt', game: 'رياضيات سريعة',
             check: (t) => digits(t) === String(ans), pts: (sec) => (sec < 5 ? 15 : 10)
         };
     },
@@ -52,7 +53,7 @@ const games = {
         while (sc === w) sc = [...w].sort(() => Math.random() - 0.5).join('');
         return {
             title: '🔤 الكلمة المبعثرة', body: `رتّب الحروف وكوّن الكلمة:\n\n## ${[...sc].join('  ')}`, seconds: 20, answer: w,
-            cardMain: [...sc].join('  '), cardSmall: 'رتّب الحروف وكوّن الكلمة',
+            cardMain: sc, cardSmall: 'رتّب الحروف وكوّن الكلمة', kind: 'tiles', iconName: 'tiles', game: 'الكلمة المبعثرة',
             check: (t) => norm(t) === norm(w), pts: () => 10
         };
     },
@@ -60,6 +61,7 @@ const games = {
         const [emoji, names] = pick(flags());
         return {
             title: '🏳️ خمّن العلم', body: `وش اسم هالدولة؟\n\n# ${emoji}`, seconds: 20, answer: names[0],
+            cardMain: emoji, flagEmoji: emoji, cardSmall: 'اكتب اسم الدولة', kind: 'flag', iconName: 'flag', game: 'خمّن العلم',
             check: (t) => names.some(n => loose(n) === loose(t)), pts: () => 10
         };
     }
@@ -79,7 +81,24 @@ async function play(i, ctx, g) {
     active.add(ch.id);
     try {
         let promptSent = false;
-        if (g.cardMain && cards.available()) {
+
+        // ١) بطاقة نوفا الجديدة (نفس الهوية لكل الألعاب الأربعة — والعلم يجيب صورته الحقيقية)
+        if (g.cardMain && art.available()) {
+            try {
+                const flag = g.flagEmoji ? await art.flagImage(g.flagEmoji) : null;
+                if (!g.flagEmoji || flag) {
+                    const png = await art.gameCard({
+                        kind: g.kind || 'text', game: g.game || g.title, main: g.cardMain,
+                        hint: g.cardSmall, seconds: g.seconds, flag, iconName: g.iconName
+                    });
+                    await i.reply({ files: [new AttachmentBuilder(png, { name: 'game.png' })] });
+                    promptSent = true;
+                }
+            } catch (err) { console.error('❌ فشل رسم بطاقة السؤال:', err.message); }
+        }
+
+        // ٢) رجوع للبطاقة القديمة (بدون الأعلام — الإيموجي يطلع مربع بالبطاقة القديمة)، ٣) رجوع للـEmbed النصي
+        if (!promptSent && g.cardMain && !g.flagEmoji && cards.available()) {
             try {
                 const png = await cards.gamePromptCard({ title: g.title, mainText: g.cardMain, small: g.cardSmall, seconds: g.seconds });
                 await i.reply({ files: [new AttachmentBuilder(png, { name: 'game.png' })] });
@@ -100,6 +119,19 @@ async function play(i, ctx, g) {
         const m = got.first(), sec = (Date.now() - t0) / 1000, pts = g.pts(sec);
         const doc = await points.add(m.guild.id, m.author.id, pts).catch(() => null);
         const leveledUp = doc ? points.levelOf(doc.points) > points.levelOf(doc.points - pts) : false;
+        const who = m.member ? m.member.displayName : m.author.username;
+
+        if (art.available()) {
+            try {
+                const png = await art.winCard({
+                    avatarURL: m.author.displayAvatarURL({ extension: 'png', size: 256 }),
+                    name: who, game: g.game || g.title, seconds: sec, points: pts,
+                    total: doc ? doc.points : null, leveledUp, level: doc ? points.levelOf(doc.points) : 0
+                });
+                await m.reply({ files: [new AttachmentBuilder(png, { name: 'win.png' })] });
+                return;
+            } catch (err) { console.error('❌ فشل رسم بطاقة الفوز:', err.message); }
+        }
 
         if (cards.available()) {
             try {

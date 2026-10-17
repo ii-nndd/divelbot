@@ -1,6 +1,7 @@
 // نظام القرعات: زر "دخول القرعة"، واختيار فائز/فائزين تلقائي عند انتهاء الوقت.
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, AttachmentBuilder } = require('discord.js');
 const store = require('./store');
+const art = require('./art');
 
 const EPH = MessageFlags.Ephemeral;
 const timers = new Map(); // messageId -> Timeout
@@ -33,6 +34,7 @@ async function endGiveaway(client, messageId) {
         const text = winners.length ? winners.map(id => `<@${id}>`).join(' ، ') : 'ما فيه أحد دخل القرعة 😢';
         const e = new EmbedBuilder().setColor(0xb3121e).setTitle(`🎉 انتهت القرعة: ${gw.prize}`)
             .setDescription(`الفايز${gw.winners > 1 ? 'ين' : ''}: ${text}`);
+        if (msg && [...msg.attachments.values()].some(a => a.name === 'giveaway.png')) e.setImage('attachment://giveaway.png');
         if (msg) await msg.edit({ embeds: [e], components: [] }).catch(() => {});
         if (winners.length) await ch.send({ content: `🎉 مبروك ${text}! فزتوا بـ **${gw.prize}**`, allowedMentions: { users: winners } });
     } catch (err) { console.error('❌ قرعة:', err.message); }
@@ -46,6 +48,20 @@ function embedFor(prize, winners, endsAt, by) {
 }
 const joinRow = () => new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('gw_join').setLabel('🎉 دخول القرعة').setStyle(ButtonStyle.Success));
+
+// يبني رسالة بدء القرعة كاملة: الـEmbed + الزر + بانر «قرعة نوفا» المصمم
+async function startPayload(prize, winners, endsAt, by, entrants = 0) {
+    const e = embedFor(prize, winners, endsAt, by);
+    const payload = { embeds: [e], components: [joinRow()] };
+    if (art.available()) {
+        try {
+            const buf = await art.giveawayCard({ prize, winners, endsAt, by, entrants });
+            e.setImage('attachment://giveaway.png');
+            payload.files = [new AttachmentBuilder(buf, { name: 'giveaway.png' })];
+        } catch (err) { console.error('❌ بانر القرعة:', err.message); }
+    }
+    return payload;
+}
 
 // تسجيل قرعة جديدة (رسالة موجودة) + ضبط مؤقّت الإنهاء التلقائي
 function register(client, msg, { guildId, channelId, prize, winners, endsAt }) {
@@ -63,7 +79,7 @@ async function launch(client, channel, { prize, winners, mins, by }) {
     const m = Math.min(10080, Math.max(1, Math.floor(Number(mins) || 1)));
     if (!p) throw new Error('اكتب الجائزة');
     const endsAt = Date.now() + m * 60_000;
-    const msg = await channel.send({ embeds: [embedFor(p, n, endsAt, by)], components: [joinRow()] });
+    const msg = await channel.send(await startPayload(p, n, endsAt, by, 0));
     register(client, msg, { guildId: channel.guild.id, channelId: channel.id, prize: p, winners: n, endsAt });
     return { id: msg.id, endsAt };
 }
@@ -135,7 +151,7 @@ async function handle(i, ctx) {
             const mins = i.options.getInteger('الدقائق');
             const winners = i.options.getInteger('الفائزين') || 1;
             const endsAt = Date.now() + mins * 60_000;
-            await i.reply({ embeds: [embedFor(prize, winners, endsAt, i.user.username)], components: [joinRow()] });
+            await i.reply(await startPayload(prize, winners, endsAt, i.user.username, 0));
             const msg = await i.fetchReply();
             register(i.client, msg, { guildId: i.guild.id, channelId: i.channel.id, prize, winners, endsAt });
         } else {
@@ -166,5 +182,5 @@ async function handleButton(i) {
 
 module.exports = {
     commands, handle, handleButton, reschedule,
-    launch, register, list, end, cancel, reroll, pickWinners
+    launch, register, list, end, cancel, reroll, pickWinners, startPayload
 };

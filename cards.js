@@ -52,7 +52,33 @@ function background(ctx, w, h, glowX) {
     const glow = ctx.createRadialGradient(glowX, h * 0.5, 10, glowX, h * 0.5, w * 0.35);
     glow.addColorStop(0, 'rgba(179,18,30,.38)'); glow.addColorStop(1, 'rgba(179,18,30,0)');
     ctx.fillStyle = glow; ctx.fillRect(0, 0, w, h);
+    // توهّج ذهبي خفيف (نفس هوية art.js)
+    const gg = ctx.createRadialGradient(w * .94, h * 1.1, 12, w * .94, h * 1.1, w * .6);
+    gg.addColorStop(0, 'rgba(255,200,90,.15)'); gg.addColorStop(1, 'rgba(255,200,90,0)');
+    ctx.fillStyle = gg; ctx.fillRect(0, 0, w, h);
     drawStars(ctx, w, h, 45);
+    // شريط علوي + إطار وزوايا ذهبية: توحّد شكل كل صور البوت مع art.js
+    const bar = ctx.createLinearGradient(0, 0, w, 0);
+    bar.addColorStop(0, 'rgba(179,18,30,0)'); bar.addColorStop(.5, CRIMSON); bar.addColorStop(1, 'rgba(179,18,30,0)');
+    ctx.fillStyle = bar; ctx.fillRect(0, 0, w, 5);
+    const i = 11;
+    roundRect(ctx, i, i, w - i * 2, h - i * 2, 24);
+    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,200,90,.15)'; ctx.stroke();
+    const cg = 'rgba(255,200,90,.34)';
+    corner(ctx, i + 16, i + 16, 1, 1, 30, cg);
+    corner(ctx, w - i - 16, i + 16, -1, 1, 30, cg);
+    corner(ctx, i + 16, h - i - 16, 1, -1, 30, cg);
+    corner(ctx, w - i - 16, h - i - 16, -1, -1, 30, cg);
+}
+
+// قوس زاوية ذهبي (نفس art.js)
+function corner(ctx, x, y, sx, sy, len, color) {
+    ctx.beginPath();
+    ctx.moveTo(x, y + sy * len);
+    ctx.lineTo(x, y);
+    ctx.lineTo(x + sx * len, y);
+    ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.stroke();
 }
 
 async function drawAvatar(ctx, url, cx, cy, r) {
