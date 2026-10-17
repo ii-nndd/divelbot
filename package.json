@@ -1,13 +1,13 @@
 {
-  "name": "voice-keeper-bot",
-  "version": "2.0.0",
-  "description": "Discord Voice Keeper Bot",
+  "name": "nova",
+  "version": "2.1.0",
+  "description": "بوت نوفا الملكية — بوت ديسكورد عربي + لوحة تحكم ويب",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12.0"
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.44",

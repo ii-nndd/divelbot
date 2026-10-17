@@ -20,19 +20,84 @@ async function endGiveaway(client, messageId) {
     const gw = all[messageId];
     if (!gw || gw.ended) return;
     gw.ended = true;
-    save(all);
     timers.delete(messageId);
+    save(all);   // نسجّل الإنهاء فوراً (حتى لو فشل جلب الروم) عشان ما ينعاد
     try {
         const ch = await client.channels.fetch(gw.channelId).catch(() => null);
         if (!ch) return;
         const msg = await ch.messages.fetch(messageId).catch(() => null);
         const winners = pickWinners(gw.entrants, gw.winners);
+        gw.wonIds = winners;        // نحفظ الفائزين عشان تظهر بلوحة التحكم
+        gw.wonAt = Date.now();
+        save(all);
         const text = winners.length ? winners.map(id => `<@${id}>`).join(' ، ') : 'ما فيه أحد دخل القرعة 😢';
         const e = new EmbedBuilder().setColor(0xb3121e).setTitle(`🎉 انتهت القرعة: ${gw.prize}`)
             .setDescription(`الفايز${gw.winners > 1 ? 'ين' : ''}: ${text}`);
         if (msg) await msg.edit({ embeds: [e], components: [] }).catch(() => {});
         if (winners.length) await ch.send({ content: `🎉 مبروك ${text}! فزتوا بـ **${gw.prize}**`, allowedMentions: { users: winners } });
     } catch (err) { console.error('❌ قرعة:', err.message); }
+}
+
+// ===== مشترك بين أمر السلاش ولوحة التحكم =====
+function embedFor(prize, winners, endsAt, by) {
+    return new EmbedBuilder().setColor(0xb3121e).setTitle(`🎉 قرعة: ${prize}`)
+        .setDescription(`اضغط الزر عشان تدخل القرعة!\nعدد الفائزين: **${winners}**\nتنتهي: <t:${Math.floor(endsAt / 1000)}:R>`)
+        .setFooter({ text: by ? `بدأها ${by}` : 'من لوحة نوفا' });
+}
+const joinRow = () => new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('gw_join').setLabel('🎉 دخول القرعة').setStyle(ButtonStyle.Success));
+
+// تسجيل قرعة جديدة (رسالة موجودة) + ضبط مؤقّت الإنهاء التلقائي
+function register(client, msg, { guildId, channelId, prize, winners, endsAt }) {
+    const all = allGw();
+    all[msg.id] = { guildId, channelId, prize, winners, endsAt, entrants: [], ended: false };
+    save(all);
+    if (timers.has(msg.id)) clearTimeout(timers.get(msg.id));
+    timers.set(msg.id, setTimeout(() => endGiveaway(client, msg.id), Math.max(0, endsAt - Date.now())));
+    return msg.id;
+}
+// بدء قرعة من أي مكان (لوحة التحكم): ترسل رسالة جديدة بالروم
+async function launch(client, channel, { prize, winners, mins, by }) {
+    const p = String(prize || '').trim().slice(0, 200);
+    const n = Math.min(10, Math.max(1, Math.floor(Number(winners) || 1)));
+    const m = Math.min(10080, Math.max(1, Math.floor(Number(mins) || 1)));
+    if (!p) throw new Error('اكتب الجائزة');
+    const endsAt = Date.now() + m * 60_000;
+    const msg = await channel.send({ embeds: [embedFor(p, n, endsAt, by)], components: [joinRow()] });
+    register(client, msg, { guildId: channel.guild.id, channelId: channel.id, prize: p, winners: n, endsAt });
+    return { id: msg.id, endsAt };
+}
+const list = () => allGw();
+// إنهاء قرعة فوراً (نفس زر «إنهاء» بالأمر)
+const end = (client, id) => endGiveaway(client, String(id || ''));
+// إلغاء قرعة: يشيل المؤقّت + يحذف الرسالة + يمسحها من التخزين
+async function cancel(client, id) {
+    const key = String(id || '');
+    const all = allGw();
+    const gw = all[key];
+    if (!gw) throw new Error('ما لقيت قرعة بهذا الآي دي');
+    if (timers.has(key)) { clearTimeout(timers.get(key)); timers.delete(key); }
+    try {
+        const ch = await client.channels.fetch(gw.channelId).catch(() => null);
+        const msg = ch ? await ch.messages.fetch(key).catch(() => null) : null;
+        if (msg) await msg.delete().catch(() => {});
+    } catch (err) { console.error('❌ إلغاء قرعة:', err.message); }
+    delete all[key];
+    save(all);
+}
+// إعادة سحب الفائزين لقرعة منتهية (راتب ثاني)
+async function reroll(client, id) {
+    const key = String(id || '');
+    const all = allGw();
+    const gw = all[key];
+    if (!gw) throw new Error('ما لقيت قرعة بهذا الآي دي');
+    if (!gw.entrants.length) throw new Error('ما فيه أحد دخل القرعة');
+    const winners = pickWinners(gw.entrants, gw.winners);
+    const ch = await client.channels.fetch(gw.channelId).catch(() => null);
+    if (!ch) throw new Error('الروم مو موجود');
+    const text = winners.map(w => `<@${w}>`).join(' ، ');
+    await ch.send({ content: `🔄 إعادة سحب قرعة **${gw.prize}** — الفايز${gw.winners > 1 ? 'ين' : ''}: ${text}`, allowedMentions: { users: winners } });
+    return winners;
 }
 
 // يعيد جدولة القرعات اللي ما خلصت لو البوت انعاد تشغيله
@@ -70,17 +135,9 @@ async function handle(i, ctx) {
             const mins = i.options.getInteger('الدقائق');
             const winners = i.options.getInteger('الفائزين') || 1;
             const endsAt = Date.now() + mins * 60_000;
-            const e = new EmbedBuilder().setColor(0xb3121e).setTitle(`🎉 قرعة: ${prize}`)
-                .setDescription(`اضغط الزر عشان تدخل القرعة!\nعدد الفائزين: **${winners}**\nتنتهي: <t:${Math.floor(endsAt / 1000)}:R>`)
-                .setFooter({ text: `بدأها ${i.user.username}` });
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('gw_join').setLabel('🎉 دخول القرعة').setStyle(ButtonStyle.Success));
-            await i.reply({ embeds: [e], components: [row] });
+            await i.reply({ embeds: [embedFor(prize, winners, endsAt, i.user.username)], components: [joinRow()] });
             const msg = await i.fetchReply();
-            const all = allGw();
-            all[msg.id] = { guildId: i.guild.id, channelId: i.channel.id, prize, winners, endsAt, entrants: [], ended: false };
-            save(all);
-            timers.set(msg.id, setTimeout(() => endGiveaway(i.client, msg.id), mins * 60_000));
+            register(i.client, msg, { guildId: i.guild.id, channelId: i.channel.id, prize, winners, endsAt });
         } else {
             const id = i.options.getString('الايدي').trim();
             const all = allGw();
@@ -107,4 +164,7 @@ async function handleButton(i) {
     return true;
 }
 
-module.exports = { commands, handle, handleButton, reschedule };
+module.exports = {
+    commands, handle, handleButton, reschedule,
+    launch, register, list, end, cancel, reroll, pickWinners
+};

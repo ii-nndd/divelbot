@@ -14,6 +14,8 @@ const levels = require('./levels');
 const botcontrol = require('./botcontrol');
 const colors = require('./colors');
 const replies = require('./replies');
+const economy = require('./economy');
+const giveaway = require('./giveaway');
 
 // الرابط العام: يُقرأ وقت الطلب (مو وقت الإقلاع) لأن النفق التلقائي يضبطه بعد الإقلاع
 const BASE = () => (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'https://divelbot.onrender.com').replace(/\/+$/, '');
@@ -41,7 +43,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-10-18.3';
+const BUILD = '2026-10-18.4';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -293,7 +295,7 @@ function go(fn,msg,page){fn.then(function(){toast(msg||'تم ✅');if(page)show(
 var NOVA_MARK_SVG='<svg width="22" height="22" viewBox="0 0 100 100" style="vertical-align:-5px;margin-left:8px"><defs><radialGradient id="ngc" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff6e8"/><stop offset="45%" stop-color="#ff8a3d"/><stop offset="100%" stop-color="#b3121e"/></radialGradient></defs><g fill="url(#ngc)"><polygon points="50,6 58,42 94,50 58,58 50,94 42,58 6,50 42,42"/><polygon points="50,24 54,42 50,50 46,42" opacity="0"/></g><circle cx="50" cy="50" r="13" fill="url(#ngc)"/></svg>';
 function sw(on,fn){var i=el('input',{type:'checkbox'});i.checked=!!on;i.addEventListener('change',function(){fn(i.checked)});var l=el('label',{class:'tgl'},[i,el('span',{class:'sl'})]);l.title='اضغط للتبديل';return l}
 var pages={},cur='overview',PAGE_T=null;
-var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود'],['welcome','👋','الترحيب'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['*الإدارة والحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
+var NAV=[['*الرئيسية'],['overview','📊','نظرة عامة'],['bot','🤖','التحكم بالبوت'],['channels','🗂️','الرومات'],['roles','🎭','الرتب'],['colors','🎨','رتب الألوان'],['levels','🏆','المستويات'],['members','👥','الأعضاء'],['*الرسائل والأنظمة'],['replies','💬','الردود'],['welcome','👋','الترحيب'],['economy','🪙','الاقتصاد'],['giveaway','🎉','القرعات'],['tickets','🎫','التذاكر'],['announce','📣','الإعلانات'],['*الإدارة والحماية'],['jail','⛓️','السجن'],['trap','🪤','روم الفخ'],['bans','🚫','المحظورين'],['log','📜','السجل']];
 function navItem(p){var it=null;NAV.forEach(function(n){if(n.length>1&&n[0]===p)it=n});return it}
 // يحوّل عنوان الصفحة العادي (h1 + وصف) إلى رأس موحّد جديد — يشتغل تلقائياً على كل الصفحات
 function phead(p,m){var hd=null,i;for(i=0;i<m.children.length&&i<3;i++){if(m.children[i].tagName==='H1'){hd=m.children[i];break}}
@@ -354,7 +356,7 @@ logs.forEach(function(x){fc.appendChild(el('div',{class:'frow'},[el('div',{class
 var qc=el('div',{class:'bc s5 violet'});
 qc.appendChild(el('div',{class:'hd'},[el('div',{class:'si violet',text:'⚡'}),el('div',{},[el('div',{class:'ti',text:'إجراءات سريعة'}),el('div',{class:'ts',text:'انتقال فوري لأي صفحة'})])]));
 var qg=el('div',{class:'qa'});
-[['💬','الردود','replies'],['🎨','رتب الألوان','colors'],['👋','الترحيب','welcome'],['📣','الإعلانات','announce'],['🏆','المستويات','levels'],['👥','الأعضاء','members']].forEach(function(q){
+[['💬','الردود','replies'],['🎨','رتب الألوان','colors'],['🪙','الاقتصاد','economy'],['🎉','القرعات','giveaway'],['👋','الترحيب','welcome'],['📣','الإعلانات','announce'],['🏆','المستويات','levels'],['👥','الأعضاء','members']].forEach(function(q){
   var b=el('button',{class:'qb'},[el('span',{class:'qe',text:q[0]}),el('span',{text:q[1]})]);
   b.addEventListener('click',function(){show(q[2])});qg.appendChild(b);
 });
@@ -415,6 +417,16 @@ cc.appendChild(el('div',{class:'row',style:'margin-top:12px'},[
   el('button',{class:'b2',text:'⬆️ استيراد نسخة',on:{click:function(){fi.click()}}})
 ]));
 cc.appendChild(fi);
+var gcard=el('div',{class:'card'});
+gcard.appendChild(el('div',{class:'cat',text:'🎮 قوائم الألعاب'}));
+gcard.appendChild(el('div',{class:'mut',text:'هذي القوائم اللي ياخذ منها البوت أسئلة الألعاب — كل سطر = عنصر واحد. اضغط أي وحدة تفتح لك تعديلها فوراً باليسار.'}));
+gcard.appendChild(el('div',{class:'row',style:'margin-top:10px'},[
+  el('button',{class:'b2',text:'⌨️ جمل سرعة الكتابة',on:{click:function(){openKey('games.sentences')}}}),
+  el('button',{class:'b2',text:'🔤 كلمات المبعثرة',on:{click:function(){openKey('games.words')}}}),
+  el('button',{class:'b2',text:'🏳️ الأعلام',on:{click:function(){openKey('games.flags')}}})
+]));
+gcard.appendChild(el('div',{class:'mut',style:'margin-top:8px',text:'لعبة الرياضيات ما لها قائمة (البوت يولّد الأرقام عشوائي). صيغة الأعلام: العلم => اسم الدولة | اسم ثاني'}));
+m.appendChild(gcard);
 m.appendChild(cc);
 drawList('');
 return Promise.resolve()})};
@@ -680,6 +692,134 @@ m.appendChild(el('div',{class:'mut',text:'ملاحظة: لازم البوت عن
 return Promise.resolve()})};
 pages.log=function(m){return api('log').then(function(d){m.appendChild(el('h1',{text:'السجل'}));var b=el('div',{class:'card'});
 if(!d.log.length)b.appendChild(el('div',{class:'mut',text:'ما فيه إجراءات للحين'}));d.log.forEach(function(l){b.appendChild(el('div',{class:'item'},[el('span',{class:'nm',text:l.msg}),el('span',{class:'mut',text:l.by+' • '+new Date(l.at).toLocaleString('ar')})]))});m.appendChild(b)})};
+// ===== الاقتصاد: الراتب اليومي + متجر الرتب + أرصدة الأعضاء =====
+pages.economy=function(m){return api('economy').then(function(d){
+var nf=function(n){return Number(n||0).toLocaleString('en-US')};
+var coin=d.coin||'🪙';
+function ni(v,mn,mx,w){return el('input',{type:'number',value:String(v),min:String(mn),max:String(mx),style:'width:'+(w||115)+'px'})}
+m.appendChild(el('h1',{text:'الاقتصاد والمتجر'}));
+m.appendChild(el('div',{class:'mut',text:'عملة السيرفر '+coin+' — من هنا تعدّل الراتب اليومي ومتجر الرتب وأرصدة الأعضاء. أوامر /يومي و/المتجر و/شراء تاخذ من هذي الإعدادات فوراً بدون إعادة تشغيل.'}));
+var mn=ni(d.daily.min,1,1000000),mx=ni(d.daily.max,1,1000000),cd=ni(d.daily.cdHours,1,168);
+var c1=el('div',{class:'card'});
+c1.appendChild(el('div',{class:'cat',text:'💰 الراتب اليومي (أمر /يومي)'}));
+c1.appendChild(el('div',{class:'row'},[el('span',{class:'mut',text:'أقل راتب'}),mn,el('span',{class:'mut',text:'أكثر راتب'}),mx,el('span',{class:'mut',text:'ينتظر كم ساعة'}),cd]));
+c1.appendChild(el('div',{class:'row',style:'margin-top:12px'},[el('button',{class:'btn',text:'💾 حفظ الراتب',on:{click:function(){go(api('economy/daily',{min:mn.value,max:mx.value,cdHours:cd.value}),'انحفظ ✅',null)}}})]));
+c1.appendChild(el('div',{class:'mut',style:'margin-top:8px',text:'البوت يعطي رقم عشوائي بين الأقل والأكثر، والعضو ياخذ مرة وحدة كل المدة المحددة (الافتراضي ٢٠ ساعة عشان ما يتراكم).'}));
+m.appendChild(c1);
+var c2=el('div',{class:'card'});
+c2.appendChild(el('div',{class:'cat',text:'🛒 متجر الرتب ('+d.shop.length+' عنصر)'}));
+if(!d.shop.length)c2.appendChild(el('div',{class:'mut',text:'المتجر فاضي — ضف رتبة من تحت.'}));
+d.shop.forEach(function(it,i){
+var p=ni(it.price,1,100000000);
+c2.appendChild(el('div',{class:'item'},[
+  el('span',{class:'rank',text:String(i+1)}),
+  el('span',{class:'nm',text:it.exists?it.name:'⚠️ رتبة محذوفة ('+it.roleId+')'}),
+  el('span',{class:'mut',text:coin}),
+  p,
+  el('button',{class:'b2',text:'💾',title:'حفظ السعر',on:{click:function(){go(api('economy/shop',{action:'price',index:i,price:p.value}),'انحفظ ✅','economy')}}}),
+  el('button',{class:'b2',text:'▲',title:'طلّعه فوق',on:{click:function(){go(api('economy/shop',{action:'move',index:i,dir:-1}),'تم ✅','economy')}}}),
+  el('button',{class:'b2',text:'▼',title:'نزّله تحت',on:{click:function(){go(api('economy/shop',{action:'move',index:i,dir:1}),'تم ✅','economy')}}}),
+  el('button',{class:'dn',text:'🗑',title:'حذف من المتجر',on:{click:function(){if(confirm('أشيل '+(it.name||'العنصر')+' من المتجر؟ (الرتبة نفسها ما تنحذف)'))go(api('economy/shop',{action:'remove',index:i}),'انشال ✅','economy')}}})
+]));
+});
+var rs=el('select',{},[opt('','اختر رتبة تضيفها للمتجر')].concat(d.roles.map(function(r){return opt(r.id,r.name)})));
+var np=ni(500,1,100000000);
+c2.appendChild(el('div',{class:'row',style:'margin-top:14px'},[rs,np,el('button',{class:'btn',text:'➕ إضافة للمتجر',on:{click:function(){if(!rs.value)return toast('اختر رتبة أول',1);go(api('economy/shop',{action:'add',roleId:rs.value,price:np.value}),'انضاف ✅','economy')}}})]));
+c2.appendChild(el('div',{class:'mut',style:'margin-top:8px',text:'الأعضاء يشترون بالأمر /شراء + رقم العنصر — رتّب العناصر بأسهم ▲▼.'}));
+m.appendChild(c2);
+var c3=el('div',{class:'card'});
+c3.appendChild(el('div',{class:'hd'},[el('div',{class:'si gold',text:'🏆'}),el('div',{},[el('div',{class:'ti',text:'عملة السيرفر'}),el('div',{class:'ts',text:'أغنى الأعضاء والمجموع الكلي'})])]));
+c3.appendChild(el('div',{class:'kv',style:'margin-bottom:6px'},[
+  el('span',{class:'tag on',text:'المجموع '+nf(d.sum)+' '+coin}),
+  el('span',{class:'tag',text:'عدد الحسابات '+nf(d.total)})
+]));
+if(!d.top.length)c3.appendChild(el('div',{class:'mut',text:'ما فيه أحد عنده عملة بعد — أول ما يستخدمون /يومي بيظهرون هنا.'}));
+var tmx=Math.max(1,Number(d.top.length?d.top[0].balance:0)||1);
+d.top.forEach(function(u,i){
+c3.appendChild(el('div',{class:'lrow'},[
+  el('div',{class:'rank r'+(i+1),text:i===0?'👑':String(i+1)}),
+  el('div',{style:'flex:1;min-width:0'},[el('div',{class:'lnm',text:u.name||('آيدي '+u.id)}),el('div',{class:'bar',style:'height:8px;margin-top:6px'},[el('i',{style:'width:'+Math.max(4,Math.round(u.balance/tmx*100))+'%'})])]),
+  el('div',{class:'lpt',text:nf(u.balance)+' '+coin})
+]));});
+m.appendChild(c3);
+var c4=el('div',{class:'card'});
+c4.appendChild(el('div',{class:'cat',text:'🔍 رصيد عضو'}));
+var q=el('input',{placeholder:'آي دي العضو أو اسمه',style:'flex:1;min-width:200px'}),out=el('div',{});
+function find(v){out.innerHTML='';out.appendChild(el('div',{class:'mut',text:'جاري البحث...'}));
+api('economy/member?q='+encodeURIComponent(v)).then(function(r){out.innerHTML='';
+  if(!r.members.length){out.appendChild(el('div',{class:'mut',text:'ما فيه نتائج'}));return}
+  r.members.forEach(function(u){
+    var amt=ni(100,1,1000000000,120);
+    out.appendChild(el('div',{class:'card'},[
+      el('div',{class:'row'},[
+        el('img',{src:u.avatar,width:'44',height:'44',style:'border-radius:50%'}),
+        el('div',{style:'flex:1;min-width:140px'},[el('div',{text:u.name}),el('div',{class:'mut',text:u.user+' • '+u.id})]),
+        el('span',{class:'tag on',text:'الرصيد '+nf(u.balance)+' '+coin})
+      ]),
+      el('div',{class:'row',style:'margin-top:10px'},[amt,
+        el('button',{class:'b2',text:'➕ إضافة',on:{click:function(){bal(u.id,Math.abs(Number(amt.value)))}}}),
+        el('button',{class:'b2',text:'➖ خصم',on:{click:function(){bal(u.id,-Math.abs(Number(amt.value)))}}}),
+        el('button',{class:'b2',text:'💾 تعيين الرصيد لهذا الرقم',on:{click:function(){if(confirm('أخلي رصيد '+u.name+' بالضبط '+amt.value+' ؟'))bal(u.id,Number(amt.value),true)}}})
+      ])
+    ]));
+  });
+}).catch(function(e){out.innerHTML='';out.appendChild(el('div',{class:'mut',text:e.message}))})}
+function bal(id,amount,set){api('economy/balance',{id:id,amount:amount,set:!!set}).then(function(r){toast('تم ✅ الرصيد الآن '+nf(r.balance)+' '+coin);find(id)}).catch(function(e){toast(e.message,1)})}
+c4.appendChild(row([q,el('button',{class:'btn',text:'بحث',on:{click:function(){if(q.value.trim())find(q.value.trim())}}})]));
+c4.appendChild(el('div',{class:'mut',style:'margin:2px 0 10px',text:'الآي دي يشتغل دايماً. البحث بالاسم يحتاج تفعيل MEMBERS_INTENT.'}));
+c4.appendChild(out);
+m.appendChild(c4);
+return Promise.resolve()})};
+// ===== القرعات: بدء/إنهاء/إلغاء/إعادة سحب من اللوحة =====
+pages.giveaway=function(m){return api('giveaway').then(function(d){
+function leftTxt(ms){var s=Math.max(0,Math.floor(ms/1000));if(s<=0)return '⏰ وقته خلص';
+  if(s>=3600)return '⏳ '+Math.floor(s/3600)+' ساعة '+Math.floor(s%3600/60)+' دقيقة';
+  if(s>=60)return '⏳ '+Math.floor(s/60)+' دقيقة '+String(s%60)+' ث';return '⏳ '+s+' ثانية'}
+m.appendChild(el('h1',{text:'القرعات'}));
+m.appendChild(el('div',{class:'mut',text:'ابدأ قرعة بضغطة بدون أوامر — الزر اللي ينرسل بالروم هو نفسه زر /قرعة_بدء، والإنهاء واختيار الفائزين يصير تلقائياً عند انتهاء الوقت.'}));
+var c1=el('div',{class:'card'});
+c1.appendChild(el('div',{class:'cat',text:'🎉 قرعة جديدة'}));
+var ch=el('select',{},[opt('','اختر الروم')].concat(d.channels.map(function(c){return opt(c.id,'# '+c.name)})));
+var pz=el('input',{placeholder:'الجائزة — مثال: رتبة مميزة أو ٥٠٠ نقطة',style:'flex:1;min-width:200px'});
+var mn=el('input',{type:'number',value:'10',min:'1',max:'10080',style:'width:115px'});
+var wn=el('input',{type:'number',value:'1',min:'1',max:'10',style:'width:100px'});
+c1.appendChild(el('div',{class:'row'},[ch,pz]));
+c1.appendChild(el('div',{class:'row',style:'margin-top:12px'},[el('span',{class:'mut',text:'المدة بالدقائق'}),mn,el('span',{class:'mut',text:'عدد الفائزين'}),wn,
+el('button',{class:'btn',text:'🚀 ابدأ القرعة',on:{click:function(){
+  if(!ch.value)return toast('اختر الروم أول',1);
+  if(!pz.value.trim())return toast('اكتب الجائزة',1);
+  go(api('giveaway/start',{channelId:ch.value,prize:pz.value,minutes:mn.value,winners:wn.value}),'انطلقت القرعة 🎉','giveaway')}}})]));
+m.appendChild(c1);
+var c2=el('div',{class:'card'});
+c2.appendChild(el('div',{class:'cat',text:'⏳ قرعات شغالة ('+d.active.length+')'}));
+if(!d.active.length)c2.appendChild(el('div',{class:'mut',text:'ما فيه قرعة شغالة حالياً.'}));
+d.active.forEach(function(w){
+var it=el('div',{class:'item'},[
+  el('span',{class:'nm',text:w.prize}),
+  el('span',{class:'tag',text:'# '+w.channel}),
+  el('span',{class:'tag on',text:'👤 '+w.entrants+' متسابق'}),
+  el('span',{class:'tag',id:'gwt'+w.id,text:leftTxt(w.endsAt-Date.now())}),
+  el('button',{class:'b2',text:'🏁 إنهاء الآن',on:{click:function(){if(confirm('أنهي قرعة «'+w.prize+'» الحين وأختار الفائزين؟'))go(api('giveaway/end',{id:w.id,confirm:true}),'انتهت 🎉','giveaway')}}}),
+  el('button',{class:'dn',text:'🗑 إلغاء',on:{click:function(){if(confirm('ألغي قرعة «'+w.prize+'» وأحذف رسالتها؟'))go(api('giveaway/cancel',{id:w.id,confirm:true}),'انلغت ✅','giveaway')}}})
+]);
+if(w.sample&&w.sample.length)it.appendChild(el('div',{class:'mut',style:'flex-basis:100%',text:'داخلين: '+w.sample.join(' ، ')+(w.entrants>w.sample.length?' وآخرين…':'')}));
+c2.appendChild(it)});
+m.appendChild(c2);
+if(d.ended.length){
+var c3=el('div',{class:'card'});
+c3.appendChild(el('div',{class:'cat',text:'🏆 قرعات منتهية'}));
+d.ended.forEach(function(w){
+c3.appendChild(el('div',{class:'item'},[
+  el('span',{class:'nm',text:w.prize}),
+  el('span',{class:'tag',text:'# '+w.channel}),
+  el('span',{class:'tag',text:'👤 '+w.entrants}),
+  el('span',{class:'mut',text:w.wonNames.length?'فاز: '+w.wonNames.join(' ، '):'ما فاز أحد'}),
+  el('button',{class:'b2',text:'🔄 إعادة سحب',on:{click:function(){if(confirm('أعيد السحب على نفس المتسابقين؟'))go(api('giveaway/reroll',{id:w.id}),'تمت إعادة السحب 🔄','giveaway')}}}),
+  el('button',{class:'dn',text:'🗑 حذف',on:{click:function(){if(confirm('أحذف قرعة «'+w.prize+'» من القائمة ورسالتها؟'))go(api('giveaway/cancel',{id:w.id,confirm:true}),'انحذفت ✅','giveaway')}}})
+]))});
+m.appendChild(c3)}
+PAGE_T=setInterval(function(){d.active.forEach(function(w){var n=$('gwt'+w.id);if(n)n.textContent=leftTxt(w.endsAt-Date.now())})},1000);
+return Promise.resolve()})};
 pages.members=function(m){m.appendChild(el('h1',{text:'الأعضاء'}));
 var q=el('input',{placeholder:'آي دي العضو أو اسمه',style:'flex:1;min-width:200px'}),out=el('div',{});
 function find(v){out.innerHTML='';Promise.all([api('members/search?q='+encodeURIComponent(v)),api('roles')]).then(function(r){
@@ -1392,6 +1532,135 @@ module.exports = function mountDashboard(app, express, client, CONFIG) {
         const rec = store.read('trapbans.json', {});
         if (rec[id]) { delete rec[id]; store.write('trapbans.json', rec); }
         note(req, `فك حظر: ${id}`);
+    }));
+
+    // ===== الاقتصاد: الراتب اليومي + متجر الرتب + أرصدة الأعضاء =====
+    const COIN = '🪙';
+    const roleOpts = (g) => [...g.roles.cache.values()].filter(r => r.id !== g.id && !r.managed)
+        .sort((a, b) => b.position - a.position || a.name.localeCompare(b.name)).map(r => ({ id: r.id, name: r.name }));
+    const shopName = (g, roleId) => { const r = g.roles.cache.get(roleId); return r ? r.name : roleId; };
+
+    api.get('/economy', h(async (g) => {
+        const shop = economy.shopFor(g.id).map(it => ({
+            roleId: it.roleId, price: Number(it.price) || 0, name: shopName(g, it.roleId), exists: !!g.roles.cache.get(it.roleId)
+        }));
+        const raw = economy.balances(g.id);
+        const rows = Object.keys(raw).map(id => ({
+            id, balance: Math.max(0, Math.floor(Number(raw[id] && raw[id].balance) || 0)), last: Number(raw[id] && raw[id].lastDaily) || 0
+        }));
+        rows.sort((a, b) => b.balance - a.balance || a.id.localeCompare(b.id));
+        const top = rows.slice(0, 10).map(u => {
+            const m = g.members.cache.get(u.id);
+            return { id: u.id, balance: u.balance, name: m ? m.displayName : ((client.users.cache.get(u.id) || {}).username || '') };
+        });
+        return {
+            coin: COIN, daily: economy.daily(), shop, roles: roleOpts(g), top,
+            total: rows.length, sum: rows.reduce((s, u) => s + u.balance, 0)
+        };
+    }));
+    api.post('/economy/daily', h(async (g, b, req) => {
+        const cfg = economy.setDaily(b);
+        note(req, `تعديل الراتب اليومي: ${cfg.min}-${cfg.max} ${COIN} كل ${cfg.cdHours} ساعة`);
+        return { daily: cfg };
+    }));
+    api.post('/economy/shop', h(async (g, b, req) => {
+        const act = String(b.action || '');
+        if (act === 'add') {
+            const r = role(g, b.roleId);
+            economy.shopAdd(g.id, r.id, b.price);
+            note(req, `إضافة ${r.name} لمتجر الرتب`);
+        } else if (act === 'price') {
+            const it = economy.shopFor(g.id)[Number(b.index)];
+            if (!it) throw new Error('العنصر مو موجود');
+            economy.shopUpdate(g.id, b.index, b.price);
+            note(req, `تعديل سعر ${shopName(g, it.roleId)} إلى ${Number(b.price)} ${COIN}`);
+        } else if (act === 'remove') {
+            const it = economy.shopFor(g.id)[Number(b.index)];
+            if (!it) throw new Error('العنصر مو موجود');
+            economy.shopRemove(g.id, b.index);
+            note(req, `حذف ${shopName(g, it.roleId)} من المتجر`);
+        } else if (act === 'move') {
+            economy.shopMove(g.id, b.index, b.dir);
+        } else throw new Error('إجراء غير معروف');
+        return { shop: economy.shopFor(g.id) };
+    }));
+    api.get('/economy/member', h(async (g, b, req) => {
+        const q = String(req.query.q || '').trim();
+        const id = (q.match(/\d{17,20}/) || [])[0];
+        let found = [];
+        if (id) found = [await getMember(g, id)];
+        else {
+            if (process.env.MEMBERS_INTENT !== '1') throw new Error('البحث بالاسم غير مفعل: ابحث بالآي دي، أو أضف MEMBERS_INTENT=1');
+            if (q.length < 2) throw new Error('اكتب حرفين على الأقل');
+            found = [...(await g.members.search({ query: q, limit: 10 })).values()];
+        }
+        return {
+            members: found.map(m => ({
+                id: m.id, name: m.displayName, user: m.user.username,
+                avatar: m.displayAvatarURL({ size: 64 }), balance: economy.get(g.id, m.id).balance
+            }))
+        };
+    }));
+    api.post('/economy/balance', h(async (g, b, req) => {
+        const m = await getMember(g, b.id);
+        const amount = Number(b.amount);
+        if (!Number.isInteger(amount) || Math.abs(amount) > 1000000000) throw new Error('رقم غير صالح');
+        const doc = b.set ? economy.setBalance(g.id, m.id, amount) : economy.addBalance(g.id, m.id, amount);
+        note(req, `${b.set ? 'تعيين' : (amount >= 0 ? 'إضافة' : 'خصم')} ${Math.abs(amount)} ${COIN} لـ ${m.user.username} (صار ${doc.balance})`);
+        return { balance: doc.balance };
+    }));
+
+    // ===== القرعات: بدء/إنهاء/إلغاء/إعادة سحب (نفس نظام /قرعة_بدء) =====
+    const gwChan = (g, id) => {
+        const c = chan(g, id);
+        if (!c.isTextBased() || c.isVoiceBased()) throw new Error('اختر روم نصي');
+        return c;
+    };
+    const uName = (g, id) => { const m = g.members.cache.get(id); return m ? m.displayName : ((client.users.cache.get(id) || {}).username || id); };
+
+    api.get('/giveaway', h(async (g) => {
+        await g.channels.fetch();
+        const all = giveaway.list();
+        const rows = Object.keys(all).map(id => Object.assign({ id }, all[id]));
+        const chName = (id) => { const c = g.channels.cache.get(id); return c ? c.name : 'روم محذوف'; };
+        const active = rows.filter(w => !w.ended).sort((a, b) => a.endsAt - b.endsAt).map(w => ({
+            id: w.id, prize: w.prize, endsAt: w.endsAt, channel: chName(w.channelId), winnersCount: w.winners,
+            entrants: (w.entrants || []).length, sample: (w.entrants || []).slice(0, 6).map(id => uName(g, id))
+        }));
+        const ended = rows.filter(w => w.ended).sort((a, b) => (b.wonAt || b.endsAt) - (a.wonAt || a.endsAt)).slice(0, 8).map(w => ({
+            id: w.id, prize: w.prize, endsAt: w.endsAt, channel: chName(w.channelId),
+            entrants: (w.entrants || []).length, wonNames: (w.wonIds || []).map(id => uName(g, id))
+        }));
+        return {
+            active, ended,
+            channels: [...g.channels.cache.values()].filter(c => c.type === ChannelType.GuildText)
+                .sort((a, b) => a.rawPosition - b.rawPosition).map(c => ({ id: c.id, name: c.name }))
+        };
+    }));
+    api.post('/giveaway/start', h(async (g, b, req) => {
+        const c = gwChan(g, b.channelId);
+        const r = await giveaway.launch(client, c, { prize: b.prize, winners: b.winners, mins: b.minutes, by: req.user.name });
+        note(req, `بدء قرعة «${String(b.prize || '').slice(0, 40)}» في #${c.name}`);
+        return r;
+    }));
+    api.post('/giveaway/end', h(async (g, b, req) => {
+        if (b.confirm !== true) throw new Error('يحتاج تأكيد');
+        const w = giveaway.list()[String(b.id)];
+        if (!w) throw new Error('ما لقيت القرعة (يمكن انحذفت)');
+        await giveaway.end(client, b.id);
+        note(req, `إنهاء قرعة «${String(w.prize || '').slice(0, 40)}»`);
+    }));
+    api.post('/giveaway/cancel', h(async (g, b, req) => {
+        if (b.confirm !== true) throw new Error('يحتاج تأكيد');
+        const w = giveaway.list()[String(b.id)] || {};
+        await giveaway.cancel(client, b.id);
+        note(req, `إلغاء قرعة «${String(w.prize || '').slice(0, 40)}»`);
+    }));
+    api.post('/giveaway/reroll', h(async (g, b, req) => {
+        const w = giveaway.list()[String(b.id)] || {};
+        const winners = await giveaway.reroll(client, b.id);
+        note(req, `إعادة سحب قرعة «${String(w.prize || '').slice(0, 40)}» (${winners.length} فائز)`);
+        return { winners: winners.length };
     }));
 
     // أي مسار API غير معروف يرجّع JSON وليس صفحة HTML (كان يرجّع HTML 404 لما تكون الجلسة صالحة => يطلع خطأ «Unexpected token '<'» بالمتصفح)

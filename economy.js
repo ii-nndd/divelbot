@@ -4,7 +4,25 @@ const store = require('./store');
 
 const EPH = MessageFlags.Ephemeral;
 const COIN = '🪙';
-const DAILY_MIN = 100, DAILY_MAX = 250, DAILY_COOLDOWN = 20 * 3600_000; // 20 ساعة
+
+// ===== الراتب اليومي: صار قابلاً للتعديل من لوحة التحكم (economy.cfg.json) =====
+const DAILY_DEF = { min: 100, max: 250, cdHours: 20 }; // الافتراضي لو ما تعدل من اللوحة
+const daily = () => Object.assign({}, DAILY_DEF, store.read('economy.cfg.json', {}) || {});
+function setDaily(b = {}) {
+    const cur = daily();
+    const int = (v, lo, hi, d) => {
+        const n = Math.floor(Number(v));
+        return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d;
+    };
+    const cfg = {
+        min: int(b.min, 1, 1000000, cur.min),
+        max: int(b.max, 1, 1000000, cur.max),
+        cdHours: int(b.cdHours, 1, 168, cur.cdHours)
+    };
+    if (cfg.max < cfg.min) cfg.max = cfg.min;
+    store.write('economy.cfg.json', cfg);
+    return cfg;
+}
 
 const allBal = () => store.read('economy.json', {});
 function get(gid, uid) {
@@ -26,6 +44,50 @@ function addBalance(gid, uid, amount) {
 const shopAll = () => store.read('shop.json', {});
 const shopFor = (gid) => shopAll()[gid] || [];
 function shopSave(gid, items) { const a = shopAll(); a[gid] = items; store.write('shop.json', a); }
+
+// ===== إدارة المتجر (تستخدمها لوحة التحكم) =====
+const price = (v) => { const n = Math.floor(Number(v)); return Number.isFinite(n) && n >= 1 && n <= 100000000 ? n : null; };
+function shopAdd(gid, roleId, p) {
+    const id = String(roleId || '').trim(), pr = price(p);
+    if (!/^\d{5,25}$/.test(id)) throw new Error('آيدي الرتبة غير صالح');
+    if (pr === null) throw new Error('السعر لازم يكون رقم من 1 وأعلى');
+    const items = shopFor(gid).slice();
+    if (items.some(it => it.roleId === id)) throw new Error('هذي الرتبة موجودة بالمتجر خلاص');
+    items.push({ roleId: id, price: pr });
+    shopSave(gid, items);
+    return items;
+}
+function shopUpdate(gid, index, p) {
+    const items = shopFor(gid).slice(), i = Number(index), pr = price(p);
+    if (!items[i]) throw new Error('العنصر مو موجود');
+    if (pr === null) throw new Error('السعر لازم يكون رقم من 1 وأعلى');
+    items[i] = { roleId: items[i].roleId, price: pr };
+    shopSave(gid, items);
+    return items;
+}
+function shopRemove(gid, index) {
+    const items = shopFor(gid).slice(), i = Number(index);
+    if (!items[i]) throw new Error('العنصر مو موجود');
+    items.splice(i, 1);
+    shopSave(gid, items);
+    return items;
+}
+function shopMove(gid, index, dir) {
+    const items = shopFor(gid).slice(), i = Number(index);
+    const j = i + (Number(dir) < 0 ? -1 : 1);
+    if (!items[i] || !items[j]) return items;
+    const t = items[i]; items[i] = items[j]; items[j] = t;
+    shopSave(gid, items);
+    return items;
+}
+
+// ===== أرصدة الأعضاء (تستخدمها لوحة التحكم) =====
+const balances = (gid) => Object.assign({}, allBal()[gid] || {});
+function setBalance(gid, uid, value) {
+    const n = Math.floor(Number(value));
+    if (!/^\d{5,25}$/.test(String(uid || '')) || !Number.isFinite(n) || n < 0 || n > 1000000000) throw new Error('رقم الرصيد غير صالح');
+    return save(gid, String(uid), { balance: n });
+}
 
 const owner = (tier) => tier === 'arthur' || tier === 'ida';
 
@@ -58,13 +120,14 @@ async function handle(i, ctx) {
     try {
         switch (i.commandName) {
             case 'يومي': {
+                const D = daily();
                 const cur = get(g, i.user.id);
-                const left = DAILY_COOLDOWN - (Date.now() - cur.lastDaily);
+                const left = D.cdHours * 3600_000 - (Date.now() - cur.lastDaily);
                 if (left > 0) {
                     const h = Math.max(1, Math.ceil(left / 3600_000));
                     return i.reply({ content: `⏳ خذيت راتبك اليوم! رجع بعد حوالي **${h}** ساعة.`, flags: EPH });
                 }
-                const amount = DAILY_MIN + Math.floor(Math.random() * (DAILY_MAX - DAILY_MIN + 1));
+                const amount = D.min + Math.floor(Math.random() * (D.max - D.min + 1));
                 const doc = save(g, i.user.id, { balance: cur.balance + amount, lastDaily: Date.now() });
                 return i.reply(`${COIN} استلمت راتبك اليومي: **+${amount}**\nرصيدك الآن: **${doc.balance}** ${COIN}`);
             }
@@ -127,4 +190,8 @@ async function handle(i, ctx) {
     return true;
 }
 
-module.exports = { commands, handle, get, addBalance };
+module.exports = {
+    commands, handle, get, addBalance,
+    daily, setDaily, balances, setBalance,
+    shopFor, shopAdd, shopUpdate, shopRemove, shopMove
+};
