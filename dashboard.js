@@ -41,7 +41,7 @@ const setCookie = (res, n, v, age) =>
 const clean = (s) => String(s || '').trim().slice(0, 100);
 const hex = (s) => (/^#[0-9a-fA-F]{6}$/.test(s) ? s : null);
 // رقم إصدار اللوحة: يظهر بصفحة «نظرة عامة» وبمسار /dashboard/api/ping — يفيدنا نعرف النسخة الشغالة وهل الصفحة قديمة عند المتصفح
-const BUILD = '2026-10-18.2';
+const BUILD = '2026-10-18.3';
 
 const PAGE = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>لوحة نوفا الملكية</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0f0e14"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png"><meta name="mobile-web-app-capable" content="yes">
@@ -69,6 +69,9 @@ body{margin:0;font-family:'IBM Plex Sans Arabic',Tahoma,sans-serif;background:#0
   background-repeat:repeat,repeat,repeat,repeat,repeat,repeat,repeat,no-repeat,no-repeat,no-repeat;
   background-size:380px 220px,380px 220px,380px 220px,380px 220px,380px 220px,380px 220px,380px 220px,auto,auto,auto;
   background-attachment:fixed;-webkit-font-smoothing:antialiased}
+#bg{position:fixed;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none}
+.iconbtn{width:40px;height:40px;min-height:40px;padding:0;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;font-size:17px;cursor:pointer;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.10);color:#eceaf3;transition:background .16s,opacity .25s}
+.iconbtn:hover{background:rgba(255,255,255,.13)}
 .app{display:flex;min-height:100vh}
 .wrap{flex:1;min-width:0;max-width:1140px;display:flex;flex-direction:column}
 .sb{width:246px;padding:16px 12px 26px;flex-shrink:0;display:flex;flex-direction:column;gap:3px;position:sticky;top:0;height:100vh;overflow-y:auto;
@@ -228,9 +231,49 @@ a.btn{display:inline-block;text-decoration:none;padding:12px 20px;border-radius:
 .logo,.navlab{display:none}.nav{white-space:nowrap;padding:9px 11px;font-size:13.5px;width:auto;gap:7px}.nav.on:before{display:none}
 .topbar{padding:11px 14px}.page{padding:16px 14px calc(96px + env(safe-area-inset-bottom))}
 .hero{padding:16px;gap:11px}.hero h1{font-size:20px}.uchip .unm{display:none}}
-</style></head><body><div id="root"></div><div id="toast"></div>
+</style></head><body><canvas id="bg"></canvas><div id="root"></div><div id="toast"></div>
 <script>
 var $=function(i){return document.getElementById(i)};
+// ===== خلفية حيّة: نقاط تسبح وتلمع + خطوط خفيفة بينها (بدل صورة GIF) =====
+var BG=null;
+(function(){
+  var cv=$('bg');if(!cv)return;
+  var ctx=null;try{ctx=cv.getContext('2d')}catch(e){}
+  if(!ctx)return;
+  var W=0,H=0,DPR=1,ps=[],raf=0,run=false;
+  var reduce=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  var COL=['255,255,255','255,200,158','255,124,134','255,224,190'];
+  function size(){DPR=Math.min(2,window.devicePixelRatio||1);W=cv.clientWidth||window.innerWidth;H=cv.clientHeight||window.innerHeight;cv.width=Math.floor(W*DPR);cv.height=Math.floor(H*DPR);ctx.setTransform(DPR,0,0,DPR,0,0);mk()}
+  function mk(){var n=Math.max(24,Math.min(78,Math.round(W*H/30000)));ps=[];
+    for(var i=0;i<n;i++)ps.push({x:Math.random()*W,y:Math.random()*H,r:.6+Math.random()*1.8,vx:(Math.random()-.5)*.18,vy:(Math.random()-.5)*.18,c:COL[(Math.random()*COL.length)|0],p:Math.random()*6.283,s:.5+Math.random()*1.5})}
+  function draw(){
+    ctx.clearRect(0,0,W,H);var i,j,dx,dy,d2,a;
+    for(i=0;i<ps.length;i++)for(j=i+1;j<ps.length;j++){
+      dx=ps[i].x-ps[j].x;dy=ps[i].y-ps[j].y;d2=dx*dx+dy*dy;
+      if(d2<13000){a=(1-d2/13000)*.11;ctx.strokeStyle='rgba(232,74,86,'+a.toFixed(3)+')';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(ps[i].x,ps[i].y);ctx.lineTo(ps[j].x,ps[j].y);ctx.stroke()}
+    }
+    for(i=0;i<ps.length;i++){var p=ps[i];
+      p.x+=p.vx;p.y+=p.vy;p.p+=.022;
+      if(p.x<-12)p.x=W+12;else if(p.x>W+12)p.x=-12;
+      if(p.y<-12)p.y=H+12;else if(p.y>H+12)p.y=-12;
+      a=.26+Math.abs(Math.sin(p.p*p.s))*.55;
+      if(p.r>1.5){ctx.beginPath();ctx.fillStyle='rgba('+p.c+','+(a*.09).toFixed(3)+')';ctx.arc(p.x,p.y,p.r*5,0,6.2832);ctx.fill()}
+      ctx.beginPath();ctx.fillStyle='rgba('+p.c+','+a.toFixed(3)+')';ctx.arc(p.x,p.y,p.r,0,6.2832);ctx.fill()
+    }
+  }
+  function loop(){draw();raf=requestAnimationFrame(loop)}
+  function start(){if(run||reduce)return;run=true;loop()}
+  function stop(){run=false;if(raf)cancelAnimationFrame(raf);raf=0;try{ctx.clearRect(0,0,W,H)}catch(e){}}
+  size();window.addEventListener('resize',function(){size();if(!run)draw()});
+  document.addEventListener('visibilitychange',function(){if(document.hidden)stop();else if(BG&&BG.want)start()});
+  BG={want:true,start:start,stop:stop,toggle:function(){
+    BG.want=!BG.want;
+    if(BG.want){cv.style.display='';start()}else{stop();cv.style.display='none'}
+    try{localStorage.setItem('nova_bg',BG.want?'1':'0')}catch(e){}
+    return BG.want}};
+  var saved='1';try{saved=localStorage.getItem('nova_bg')||'1'}catch(e){}
+  if(saved==='0'){BG.want=false;cv.style.display='none'}else if(reduce){draw()}else start();
+})();
 function el(t,p,k){var e=document.createElement(t);p=p||{};for(var a in p){if(a==='text')e.textContent=p[a];else if(a==='on'){for(var v in p.on)e.addEventListener(v,p.on[v])}else if(a==='value')e.value=p[a];else e.setAttribute(a,p[a])}(k||[]).forEach(function(c){if(c)e.appendChild(c)});return e}
 function opt(v,t){return el('option',{value:v,text:t})}
 function toast(m,e){var t=$('toast');t.textContent=m;t.className=(e?'err ':'')+'on';setTimeout(function(){t.className=''},2400)}
@@ -777,7 +820,10 @@ var sb=el('div',{class:'sb'},[logo].concat(NAV.map(function(n){
 ]));
 var pill=el('div',{class:'pill'},[el('span',{class:'pdot'}),el('span',{text:'جاري الفحص…'})]);
 var chip=el('div',{class:'uchip'},[el('span',{class:'uav',text:String(d.user.name||'؟').slice(0,1).toUpperCase()}),el('span',{class:'unm',text:d.user.name})]);
-var tb=el('div',{class:'topbar'},[pill,el('div',{style:'flex:1'}),chip]);
+var bgbtn=el('button',{class:'iconbtn',title:'حركة الخلفية (تشغيل/إيقاف)',text:'🎞️'});
+bgbtn.style.opacity=(BG&&BG.want)?'1':'.45';
+bgbtn.addEventListener('click',function(){if(!BG)return;var on=BG.toggle();bgbtn.style.opacity=on?'1':'.45';toast(on?'شغّلت حركة الخلفية ✨':'وقّفت حركة الخلفية ⏸️')});
+var tb=el('div',{class:'topbar'},[pill,el('div',{style:'flex:1'}),bgbtn,chip]);
 r.appendChild(el('div',{class:'app'},[sb,el('div',{class:'wrap'},[tb,el('div',{class:'page',id:'main'})])]));
 show('overview');
 api('ping').then(function(p){pill.className='pill '+(p.bot?'on':'off');pill.innerHTML='';pill.appendChild(el('span',{class:'pdot'}));pill.appendChild(el('span',{text:(p.bot?'البوت متصل ٢٤/٧':'البوت غير جاهز')+' • مدة التشغيل '+p.mins+' دقيقة'}))}).catch(function(){pill.className='pill off';pill.innerHTML='';pill.appendChild(el('span',{class:'pdot'}));pill.appendChild(el('span',{text:'تعذّر فحص الاتصال'}))});
