@@ -200,6 +200,18 @@ DATA_DIR=/home/container/novabot-main/data
 
 **سلوك البوت:** Tailscale أول، وإذا مو مضبوط/فشل → ينزل تلقائياً لنفق Cloudflare (`tunnel.js`). ولو Funnel ما انفعّل خلال ٦ دقايق يفتح نفق Cloudflare مؤقتاً عشان ما تنقفل اللوحة.
 
+**🔴 علة معروفة عند Tailscale (صارت معنا ١٧ أكتوبر ٢٠٢٦):** يطلع `🔒 رابط اللوحة الثابت` + الشهادة تُصدر (`got cert`) و`health(tls-cert-pending): ok`، **لكن الرابط ما يفتح** والبوت نفسه يطبع `⚠️ الرابط الثابت ما تأكد`. التشخيص القاطع:
+```powershell
+# من أي جهاز (بلا كاش): النتيجة المتوقعة لو فيه سجل = عناوين، ولو العلة موجودة = SOA فقط / NODATA
+node -e "fetch('https://dns.google/resolve?name=nova-bot.taila69ee0.ts.net&type=A').then(r=>r.json()).then(j=>console.log(j.Status,JSON.stringify(j.Answer||[])))"
+```
+- العَرَض: **A/AAAA مفقودان** لاسم الـFunnel، بينما سجل `_acme-challenge.<الاسم>` **موجود** (أي أن Tailscale يقدر يكتب سجلات لهذا الاسم) → الجذر عند Tailscale مو عندنا. تكتاتها: `#21502` · `#21698` · `#11849` · `#7103`.
+- **✅ الحل:** «غلّي سمة `funnel` تختفي وترجع» ← تعيد اللوحة إنشاء السجل العام:
+  1. `login.tailscale.com/admin/dns` ← تأكد **MagicDNS** و**HTTPS Certificates** مفعّلين ← قسم **Funnel: اطفيه ثم شغّليه**.
+  2. أو `Access controls` ← `Edit policy file` ← احذف `{"target":["autogroup:member"],"attr":["funnel"]}` ← Save ← أعدها ← Save.
+  3. **Restart** للبوت ← انتظر لحد ١٠ دقايق (انتشار DNS) ← `https://<الرابط>/health` لازم `200`.
+- ⚠️ لا تقيّم «هل نجح» إلا بفتح الرابط أو فحص DNS — **الكونسول راح يقول `🔒` حتى لو السجل العام ناقص**.
+
 ### ٨) تجديد كل أسبوعين
 
 ادخل لوحة Wispbyte **كل أسبوعين** مرة وإلا يتوقف السيرفر (وبعد ٣٠ يوم ينقل للتخزين **بلا حذف**). المجاني عندهم مدعوم بالإعلانات → **مانع الإعلانات مطفي** على موقعهم.

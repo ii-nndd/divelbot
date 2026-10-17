@@ -145,6 +145,17 @@ async function waitSocket(ms = 45_000) {
     return false;
 }
 
+// حالة Funnel الفعلية من الـCLI — عشان ما نعتبر «سكوت الأمر» نجاحاً (خطأ شائع)
+function funnelStatus() {
+    const r = ts(['funnel', 'status', '--json'], 20_000);
+    if (r.code !== 0) return null;
+    try { return JSON.parse(r.out); } catch (e) { return null; }
+}
+function funnelAllowed(st) {
+    if (!st || !st.AllowFunnel) return false;
+    return Object.keys(st.AllowFunnel).some((k) => st.AllowFunnel[k] === true);
+}
+
 // تفعيل Funnel الرابط الثابت
 let lastFunnelMsg = null;   // آخر سبب فشل (نطبعه مرة وحدة بدل ٢٠ مرة)
 function enableFunnel(port) {
@@ -163,7 +174,16 @@ function enableFunnel(port) {
             log('⚠️ لازم تفعّل Funnel مرة وحدة من هذا الرابط:\n    ' + enableLink);
             if (typeof module.exports.onNeedFunnel === 'function') module.exports.onNeedFunnel(enableLink);
         }
-        if (r.code === 0 && !/error|not enabled/i.test(text)) return true;
+        if (r.code === 0 && !/error|not enabled/i.test(text)) {
+            // ⚠️ ما نكتفي بكود الخروج: نتحقق من `funnel status` فعلاً (خطأ شائع: الأمر يرجّع 0 وهو ما فعّل شي)
+            const st = funnelStatus();
+            if (st && !funnelAllowed(st)) {
+                const line = 'Funnel رجع نجاح بلا تفعيل فعلي — حالة Funnel: ' + JSON.stringify(st.AllowFunnel || {}).slice(0, 200);
+                if (line !== lastFunnelMsg) { lastFunnelMsg = line; log(line); }
+                continue;
+            }
+            return true;
+        }
         // نطبع سبب الفشل من الـCLI (مثلاً HTTPS مو مفعّل) — مفيد جداً لتشخيص اللوحة
         if (text && !m) {
             const line = text.split('\n').map((s) => s.trim()).filter(Boolean).slice(-1)[0].slice(0, 240);
@@ -179,6 +199,8 @@ async function loop(port, dnsName) {
             url = 'https://' + dnsName.replace(/\.$/, '');
             funnelDone = true;
             log('🔒 رابط اللوحة الثابت: ' + url);
+            const fst = funnelStatus();
+            log('حالة Funnel: ' + JSON.stringify((fst && (fst.AllowFunnel || fst)) || {}).slice(0, 300));
             process.env.PUBLIC_URL = url;
             verify(url);
             if (typeof module.exports.onUrl === 'function') module.exports.onUrl(url);
@@ -198,15 +220,24 @@ async function loop(port, dnsName) {
 // ⚠️ توثيق Tailscale: سجلات DNS العامة للرابط قد تتأخر **حتى ١٠ دقايق** → نتحقق بصبر
 // (كان ٩٦ ثانية بس → يطلع تحذير كاذب «ما تأكد» قبل ما ينتشر الـDNS).
 async function verify(base) {
+    let last = '';
     for (let i = 0; i < 40; i++) {
         try {
             const r = await fetch(base + '/health', { signal: AbortSignal.timeout(15_000) });
             if (r.ok) { log('✅ الرابط الثابت يشتغل'); return; }
-        } catch {}
-        if (i && i % 8 === 0) log('… اللوحة للحين ما انتشرت (DNS قد يحتاج دقايق) — أكمل الفحص بالخلفية');
+            last = 'HTTP ' + r.status;
+        } catch (e) { last = (e && e.cause && e.cause.code) || e.message; }
+        if (i && i % 8 === 0) log('… اللوحة للحين ما انتشرت (' + last + ') — أكمل الفحص بالخلفية');
         await sleep(15_000);
     }
-    log('⚠️ ما تأكد الرابط بعد ~١٠ دقايق — تأكد أن Funnel مفعّل ثم افتح ' + base + '/health');
+    if (/ENOTFOUND|EAI_AGAIN|ENODATA/.test(last)) {
+        // مشكلة معروفة عند Tailscale: Funnel يشتغل والشهادة تُصدر، لكن **سجل DNS العام** ما يُنشأ
+        // (tailscale/tailscale#21502 · #21698 · #11849) → الحل: إطفاء/تشغيل سمة funnel من لوحة Tailscale.
+        log('⚠️ ما فيه سجل DNS عام لـ' + base + ' (' + last + ') — هذه مشكلة معروفة عند Tailscale (سجل Funnel ما يُنشأ).');
+        log('   الحل: لوحة Tailscale ← DNS ← اطفي Funnel وشغّله مرة ثانية (وتأكد MagicDNS + HTTPS مفعّلين)، أو Access controls ← احذف سمة funnel وأعدها، ثم أعد تشغيل البوت.');
+    } else {
+        log('⚠️ ما تأكد الرابط بعد ~١٠ دقايق (' + last + ') — تأكد أن Funnel مفعّل ثم افتح ' + base + '/health');
+    }
 }
 
 // نقطة التشغيل: true = Tailscale شغال (نتجاهل Cloudflare)، false = جرّب Cloudflare
@@ -234,9 +265,15 @@ async function start(port) {
             return false;
         }
         const st = ts(['status', '--json'], 30_000);
-        let dnsName = null;
-        try { dnsName = JSON.parse(st.out).Self.DNSName; } catch (e) { lastError = 'ما قدرت أقرأ حالة Tailscale'; }
+        let dnsName = null, self = null;
+        try { self = JSON.parse(st.out).Self; dnsName = self.DNSName; } catch (e) { lastError = 'ما قدرت أقرأ حالة Tailscale'; }
         if (!dnsName) { log('ما لقيت اسم الجهاز بالـtailnet — أتراجع'); return false; }
+        // نطبع قدرات الجهاز: لو `funnel` ناقص (false) فمعناه Funnel ما انفعّل من لوحة Tailscale أصلاً
+        try {
+            const caps = (self && self.Capabilities) || [];
+            const has = (n) => caps.some((c) => String(c).startsWith(n));
+            log('قدرات الجهاز: funnel=' + has('funnel') + ' · https=' + has('https') + ' · ' + (caps.find((c) => String(c).startsWith('funnel-ports')) || 'funnel-ports=غير موجود'));
+        } catch (e) {}
         log('متصل ✓ (' + dnsName.replace(/\.$/, '') + ') — أفعّل Funnel...');
         loop(port, dnsName);      // بالخلفية: تعيد المحاولة لين ينفعّل Funnel
         return true;
